@@ -1,18 +1,21 @@
 # VigilWeave
 
-This is an educational test application for understanding how code-quality and security
-analysis tools such as SonarQube work. Use it to explore scanning, findings, quality gates,
-and reporting in a controlled local environment.
+VigilWeave is an attempt to build an open-source, self-hostable alternative to code-quality
+and security platforms such as SonarQube. The goal is to bring repository scanning,
+actionable findings, quality gates, and reporting into one platform that developers can
+run, inspect, and improve themselves.
 
-It is not a production-ready service or an official SonarQube project. Use synthetic data
-and disposable test credentials only. Do not connect production systems or upload customer
-data. The edition controls are retained for testing, not as a commercial offering from this
-repository.
+The project is still under development. It is a way to learn how these platforms work while
+building an open-source alternative, not a claim of feature parity or production readiness.
+For now, use synthetic data and disposable test credentials in a controlled environment.
+Do not connect production systems or upload customer data. Existing edition controls remain
+in the codebase; local feature access is documented below.
 
-The application scans repositories for
-security vulnerabilities, secret leaks, dependency risks, infrastructure-as-code misconfiguration,
-and code quality issues, then presents the results through a web dashboard, a REST API, CI/CD
-integrations, IDE extensions, and an MCP server.
+VigilWeave scans repositories for security vulnerabilities, secret leaks, dependency risks,
+infrastructure-as-code misconfiguration, and code quality issues, then presents the results
+through a web dashboard, a REST API, CI/CD integrations, IDE extensions, and an MCP server.
+
+VigilWeave is an independent project and is not affiliated with or endorsed by SonarSource.
 
 Released under the [MIT License](LICENSE).
 
