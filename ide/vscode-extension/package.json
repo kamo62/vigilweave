@@ -1,0 +1,81 @@
+{
+  "name": "vscode-extension",
+  "displayName": "VigilWeave",
+  "version": "2.0.0",
+  "license": "MIT",
+  "private": true,
+  "publisher": "vigilweave",
+  "engines": {
+    "vscode": "^1.110.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:vigilweave.scanWorkspace",
+    "onCommand:vigilweave.scanCurrentFile",
+    "onCommand:vigilweave.scanChangedFiles",
+    "onCommand:vigilweave.setApiKey"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "vigilweave.scanWorkspace",
+        "title": "VigilWeave: Scan Workspace"
+      },
+      {
+        "command": "vigilweave.scanCurrentFile",
+        "title": "VigilWeave: Scan Current File"
+      },
+      {
+        "command": "vigilweave.scanChangedFiles",
+        "title": "VigilWeave: Scan Changed Files"
+      },
+      {
+        "command": "vigilweave.setApiKey",
+        "title": "VigilWeave: Set API Key"
+      }
+    ],
+    "configuration": {
+      "title": "VigilWeave",
+      "properties": {
+        "vigilweave.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "Base URL for the VigilWeave API."
+        },
+        "vigilweave.tenant": {
+          "type": "string",
+          "default": "default",
+          "description": "Tenant slug sent to the VigilWeave API."
+        },
+        "vigilweave.dashboardUrl": {
+          "type": "string",
+          "default": "http://localhost:5173",
+          "description": "Optional dashboard URL used for deep links."
+        },
+        "vigilweave.persistWorkspaceScans": {
+          "type": "boolean",
+          "default": true,
+          "description": "Persist full workspace scans as VigilWeave scan records."
+        },
+        "vigilweave.includeQualityMetrics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include quality metrics in IDE scans."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "package": "mkdir -p packaged && vsce package --no-yarn --allow-missing-repository --out packaged/vigilweave-vscode.vsix",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/node": "25.5.0",
+    "@types/vscode": "1.110.0",
+    "@vscode/vsce": "3.7.1",
+    "esbuild": "0.27.4",
+    "typescript": "5.9.3"
+  }
+}

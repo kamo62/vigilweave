@@ -1,0 +1,118 @@
+{
+  "id": "a8ce6900-4036-4d7d-a39d-3dc73c31e710",
+  "name": "VigilWeaveScan",
+  "friendlyName": "VigilWeave Scan",
+  "description": "Run a VigilWeave scan and enforce policy gates.",
+  "helpMarkDown": "Creates a VigilWeave scan, polls for completion, writes summary and SARIF artifacts, and optionally updates an Azure DevOps pull request comment.",
+  "category": "Build",
+  "author": "VigilWeave",
+  "version": {
+    "Major": 2,
+    "Minor": 0,
+    "Patch": 0
+  },
+  "minimumAgentVersion": "3.225.0",
+  "instanceNameFormat": "VigilWeave scan $(repo)",
+  "inputs": [
+    {
+      "name": "vigilweaveUrl",
+      "type": "string",
+      "label": "VigilWeave URL",
+      "required": true,
+      "helpMarkDown": "Base URL for the VigilWeave API."
+    },
+    {
+      "name": "apiKey",
+      "type": "string",
+      "label": "VigilWeave API key",
+      "required": true,
+      "helpMarkDown": "API key used to authenticate to VigilWeave."
+    },
+    {
+      "name": "repo",
+      "type": "string",
+      "label": "Repository URL",
+      "required": false,
+      "helpMarkDown": "Defaults to Build.Repository.Uri when omitted."
+    },
+    {
+      "name": "branch",
+      "type": "string",
+      "label": "Branch",
+      "required": false
+    },
+    {
+      "name": "commit",
+      "type": "string",
+      "label": "Commit SHA",
+      "required": false
+    },
+    {
+      "name": "scanType",
+      "type": "pickList",
+      "label": "Scan type",
+      "required": true,
+      "defaultValue": "comprehensive",
+      "options": {
+        "comprehensive": "comprehensive",
+        "fast": "fast",
+        "security-only": "security-only",
+        "custom": "custom"
+      }
+    },
+    {
+      "name": "pollIntervalSeconds",
+      "type": "string",
+      "label": "Poll interval seconds",
+      "required": false,
+      "defaultValue": "10"
+    },
+    {
+      "name": "timeoutSeconds",
+      "type": "string",
+      "label": "Timeout seconds",
+      "required": false,
+      "defaultValue": "900"
+    },
+    {
+      "name": "failOnCritical",
+      "type": "boolean",
+      "label": "Fail on critical findings",
+      "required": false,
+      "defaultValue": "true"
+    },
+    {
+      "name": "failOnHigh",
+      "type": "boolean",
+      "label": "Fail on high findings",
+      "required": false,
+      "defaultValue": "true"
+    },
+    {
+      "name": "summaryOutputPath",
+      "type": "string",
+      "label": "Summary output path",
+      "required": false,
+      "defaultValue": "$(Build.ArtifactStagingDirectory)/vigilweave-summary.json"
+    },
+    {
+      "name": "sarifOutputPath",
+      "type": "string",
+      "label": "SARIF output path",
+      "required": false,
+      "defaultValue": "$(Build.ArtifactStagingDirectory)/vigilweave/vigilweave.sarif"
+    },
+    {
+      "name": "publishPrComment",
+      "type": "boolean",
+      "label": "Update PR comment",
+      "required": false,
+      "defaultValue": "true"
+    }
+  ],
+  "execution": {
+    "Node20_1": {
+      "target": "dist/index.js"
+    }
+  }
+}
