@@ -141,7 +141,7 @@ class GitHubClient:
         return repos
 
     def authenticated_clone_url(self, repo_url: str) -> str:
-        # https://github.com/owner/repo.git → https://x-access-token:{PAT}@github.com/owner/repo.git
+        # Inject the runtime token for cloning; never log the returned URL.
         if "://" in repo_url:
             scheme, rest = repo_url.split("://", 1)
             return f"{scheme}://x-access-token:{quote(self._token, safe='')}@{rest}"
@@ -244,7 +244,7 @@ class GitLabClient:
         return repos
 
     def authenticated_clone_url(self, repo_url: str) -> str:
-        # https://gitlab.com/group/project.git → https://oauth2:{PAT}@gitlab.com/group/project.git
+        # Inject the runtime token for cloning; never log the returned URL.
         if "://" in repo_url:
             scheme, rest = repo_url.split("://", 1)
             return f"{scheme}://oauth2:{quote(self._token, safe='')}@{rest}"
@@ -339,7 +339,7 @@ class BitbucketClient:
         return repos
 
     def authenticated_clone_url(self, repo_url: str) -> str:
-        # https://bitbucket.org/workspace/repo.git → https://{username}:{password}@bitbucket.org/workspace/repo.git
+        # Inject the runtime credentials for cloning; never log the returned URL.
         if "://" in repo_url:
             scheme, rest = repo_url.split("://", 1)
             encoded_username = quote(self._username, safe="")
@@ -437,7 +437,7 @@ class AzureDevOpsClient:
         return repos
 
     def authenticated_clone_url(self, repo_url: str) -> str:
-        # https://dev.azure.com/org/project/_git/repo → https://{PAT}@dev.azure.com/org/project/_git/repo
+        # Inject the runtime token for cloning; never log the returned URL.
         if "://" in repo_url:
             scheme, rest = repo_url.split("://", 1)
             return f"{scheme}://{quote(self._token, safe='')}@{rest}"

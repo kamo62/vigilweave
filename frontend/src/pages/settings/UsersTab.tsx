@@ -313,7 +313,7 @@ export function UsersTab() {
               <div className="flex w-full max-w-xl gap-2">
                 <Input
                   type="email"
-                  placeholder="teammate@company.com"
+                  placeholder="teammate@example.com"
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                 />

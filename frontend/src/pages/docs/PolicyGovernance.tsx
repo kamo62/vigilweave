@@ -127,7 +127,7 @@ export function PolicyGovernance() {
         </ul>
         <div className="code-block">
           <pre>{`curl -X POST http://localhost:8000/api/v1/policies \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "Production Gate",

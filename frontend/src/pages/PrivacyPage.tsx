@@ -47,7 +47,7 @@ export function PrivacyPage(): JSX.Element {
 
       <h2>7. Contact</h2>
       <p>
-        Privacy questions or requests may be sent to privacy@vigilweave.com.
+        Example privacy contact: privacy@example.com. This is a placeholder, not a monitored inbox.
       </p>
     </LegalPageShell>
   )

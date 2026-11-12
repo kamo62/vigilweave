@@ -113,13 +113,19 @@ For a SaaS-style runtime with WorkOS authentication:
 SESSION_AUTH_PROVIDER=workos \
 API_KEYS_ENABLED=true \
 SAAS_ENABLED=true \
-WORKOS_API_KEY=sk_... \
-WORKOS_CLIENT_ID=client_... \
+WORKOS_API_KEY=YOUR_WORKOS_API_KEY_HERE \
+WORKOS_CLIENT_ID=YOUR_WORKOS_CLIENT_ID_HERE \
 SESSION_SECRET="$(openssl rand -hex 32)" \
 docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d --build
 ```
 
 ## Tests
+
+Documentation uses `YOUR_..._HERE` placeholders, and example contact addresses use the
+reserved `example.com` domain. These values are illustrative, not usable credentials or
+monitored inboxes. Replace placeholders locally and never commit the resulting credentials.
+Automated tests retain synthetic passwords, tokens, and licence keys to exercise authentication
+and parsing; those fixtures are not deployment credentials.
 
 ```bash
 source .venv/bin/activate
@@ -171,8 +177,8 @@ Full API reference: `docs/openapi.json`
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues should be reported privately to
-security@vigilweave.com rather than through public issues.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Do not include credentials, personal data, or
+unpatched security vulnerabilities in public issues.
 
 ## License
 

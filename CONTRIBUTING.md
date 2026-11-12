@@ -178,7 +178,7 @@ vigilweave/
 - Never commit secrets or API keys
 - Use environment variables for configuration
 - Follow security best practices for authentication
-- Report security vulnerabilities privately to security@vigilweave.com
+- Do not disclose credentials, personal data, or unpatched security vulnerabilities in public issues
 
 ## Feature Flags
 
@@ -205,7 +205,8 @@ Example: `feat: Add support for custom quality gates`
 
 ## Questions?
 
-Open a discussion or issue in the repository, or email contributors@vigilweave.com.
+Open a discussion or issue in the repository for general questions. Do not include credentials
+or personal data.
 
 ## Recognition
 
