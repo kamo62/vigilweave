@@ -1,0 +1,33 @@
+trigger: none
+
+pr:
+  branches:
+    include:
+      - "*"
+
+pool:
+  vmImage: ubuntu-24.04
+
+steps:
+  - checkout: self
+
+  - task: VigilWeaveScan@2
+    displayName: Run VigilWeave PR validation
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+    inputs:
+      vigilweaveUrl: "$(VigilWeave.Url)"
+      apiKey: "$(VigilWeave.ApiKey)"
+      scanType: "fast"
+      failOnCritical: true
+      failOnHigh: true
+      publishPrComment: true
+      pollIntervalSeconds: "10"
+      timeoutSeconds: "900"
+
+  - task: AdvancedSecurity-Publish@1
+    displayName: Publish VigilWeave SARIF
+    inputs:
+      SarifsInputDirectory: "$(Build.ArtifactStagingDirectory)/vigilweave"
+      Category: "VigilWeave"
+

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: license-server
+  namespace: vigilweave
+  labels:
+    app.kubernetes.io/name: license-server
+    app.kubernetes.io/part-of: vigilweave
+spec:
+  replicas: ${LICENSE_SERVER_REPLICAS}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: license-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: license-server
+        app.kubernetes.io/part-of: vigilweave
+    spec:
+      containers:
+        - name: license-server
+          image: ${LICENSE_SERVER_IMAGE}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: license-server-config
+            - secretRef:
+                name: license-server-secrets
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi

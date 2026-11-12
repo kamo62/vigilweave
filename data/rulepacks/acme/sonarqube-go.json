@@ -1,0 +1,39 @@
+{
+  "language": "go",
+  "profile_name": null,
+  "rules": [
+    {
+      "category": "reliability",
+      "description": null,
+      "enabled": true,
+      "language": "go",
+      "severity": "High",
+      "source": "sonarqube",
+      "source_repository": "go",
+      "source_rule_key": "go:S200",
+      "tags": [
+        "reliability",
+        "bug"
+      ],
+      "title": "Go rule one",
+      "vigilweave_rule_id": "sonarqube:go:go:s200"
+    },
+    {
+      "category": "maintainability",
+      "description": null,
+      "enabled": true,
+      "language": "go",
+      "severity": "Low",
+      "source": "sonarqube",
+      "source_repository": "go",
+      "source_rule_key": "go:S201",
+      "tags": [
+        "maintainability"
+      ],
+      "title": "Go rule two",
+      "vigilweave_rule_id": "sonarqube:go:go:s201"
+    }
+  ],
+  "source": "sonarqube",
+  "updated_at": "2026-03-24T02:37:54.381935+00:00"
+}

@@ -1,0 +1,27 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-24.04
+
+steps:
+  - checkout: self
+
+  - task: VigilWeaveScan@2
+    displayName: Run VigilWeave comprehensive scan
+    inputs:
+      vigilweaveUrl: "$(VigilWeave.Url)"
+      apiKey: "$(VigilWeave.ApiKey)"
+      scanType: "comprehensive"
+      failOnCritical: true
+      failOnHigh: false
+      publishPrComment: false
+
+  - task: AdvancedSecurity-Publish@1
+    displayName: Publish VigilWeave SARIF
+    inputs:
+      SarifsInputDirectory: "$(Build.ArtifactStagingDirectory)/vigilweave"
+      Category: "VigilWeave"
+

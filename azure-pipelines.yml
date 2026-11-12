@@ -1,0 +1,38 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - "*"
+
+pool:
+  vmImage: ubuntu-24.04
+
+variables:
+  VIGILWEAVE_URL: $(VigilWeave.Url)
+  VIGILWEAVE_API_KEY: $(VigilWeave.ApiKey)
+
+steps:
+  - checkout: self
+
+  - task: VigilWeaveScan@2
+    displayName: VigilWeave CI scan
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+    inputs:
+      vigilweaveUrl: "$(VIGILWEAVE_URL)"
+      apiKey: "$(VIGILWEAVE_API_KEY)"
+      scanType: "comprehensive"
+      failOnCritical: true
+      failOnHigh: true
+      publishPrComment: true
+
+  - task: AdvancedSecurity-Publish@1
+    displayName: Publish VigilWeave SARIF
+    inputs:
+      SarifsInputDirectory: "$(Build.ArtifactStagingDirectory)/vigilweave"
+      Category: "VigilWeave"
+

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pricing | VigilWeave Sentinel Core</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-fixed": "#dde1ff",
+              "inverse-on-surface": "#eff1f3",
+              "tertiary": "#003c36",
+              "on-secondary-fixed-variant": "#3b446e",
+              "surface-container-highest": "#e0e3e5",
+              "surface-variant": "#e0e3e5",
+              "secondary-fixed": "#dde1ff",
+              "on-primary-fixed": "#001453",
+              "tertiary-fixed": "#89f5e7",
+              "surface-bright": "#f7f9fb",
+              "background": "#f7f9fb",
+              "surface-tint": "#3755c3",
+              "primary-container": "#1e40af",
+              "inverse-primary": "#b8c4ff",
+              "error": "#ba1a1a",
+              "outline": "#757684",
+              "on-tertiary-fixed-variant": "#005049",
+              "on-primary": "#ffffff",
+              "on-error": "#ffffff",
+              "on-background": "#191c1e",
+              "primary": "#00288e",
+              "on-primary-container": "#a8b8ff",
+              "secondary-fixed-dim": "#bbc4f6",
+              "on-secondary": "#ffffff",
+              "error-container": "#ffdad6",
+              "on-error-container": "#93000a",
+              "on-tertiary-container": "#5fcdbf",
+              "surface-container-lowest": "#ffffff",
+              "on-surface": "#191c1e",
+              "on-secondary-fixed": "#0e1840",
+              "surface-dim": "#d8dadc",
+              "on-surface-variant": "#444653",
+              "inverse-surface": "#2d3133",
+              "surface": "#f7f9fb",
+              "tertiary-fixed-dim": "#6bd8cb",
+              "primary-fixed-dim": "#b8c4ff",
+              "on-primary-fixed-variant": "#173bab",
+              "on-tertiary": "#ffffff",
+              "on-secondary-container": "#4c5680",
+              "secondary": "#525c87",
+              "outline-variant": "#c4c5d5",
+              "secondary-container": "#c3ccfe",
+              "surface-container": "#eceef0",
+              "surface-container-low": "#f2f4f6",
+              "surface-container-high": "#e6e8ea",
+              "tertiary-container": "#00554e",
+              "on-tertiary-fixed": "#00201d"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .sentinel-shadow {
+            box-shadow: 0 12px 32px -4px rgba(25, 28, 30, 0.06);
+        }
+        .glass-panel {
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #173bab 0%, #00288e 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface antialiased">
+<nav class="fixed top-0 z-50 w-full px-6 h-16 flex justify-between items-center bg-[#f7f9fb] dark:bg-slate-950 border-b border-[#c4c5d5]/15 font-['Plus_Jakarta_Sans'] antialiased tracking-tight">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-[#191c1e] dark:text-slate-100">VigilWeave</span>
+<div class="hidden md:flex gap-6">
+<a class="text-[#444653] dark:text-slate-400 hover:text-[#191c1e] transition-colors" href="#">Scan</a>
+<a class="text-[#1e40af] dark:text-blue-400 font-semibold border-b-2 border-[#1e40af] pb-1" href="#">Policy</a>
+<a class="text-[#444653] dark:text-slate-400 hover:text-[#191c1e] transition-colors" href="#">Reports</a>
+<a class="text-[#444653] dark:text-slate-400 hover:text-[#191c1e] transition-colors" href="#">MCP</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-on-surface-variant hover:bg-[#f2f4f6] dark:hover:bg-slate-800/50 transition-all rounded">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-[#f2f4f6] dark:hover:bg-slate-800/50 transition-all rounded">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant/20">
+<img alt="User profile avatar" data-alt="User profile avatar circular headshot" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBI45oxV-69Adb8SD-wVvXVNhGdQ8qPWu5t2dMhC-iUBsSnW_bhaDBdrOfVh98WsF8F2bQ0s6XvptuggAD4srSb6dhRgNwvE5BpuhTzvr2C_vD3Mp7W23eusFp2DxgQl_MMsZV3aVoddytrnel6uz1VapbSoPysSUsnDSeBMmYkpcGOJi6UL47YthC63FLA4ImYBdHU5qlQORG0V03yTgJgNgGYLICcHgbEJlMLnd-lWW072fT86d59W8kcQcuDrty9cjsKg3-PqFs"/>
+</div>
+</div>
+</nav>
+<main class="pt-32 pb-24 px-6 md:px-12 lg:px-24 max-w-7xl mx-auto">
+<header class="mb-20 text-center max-w-3xl mx-auto">
+<span class="text-xs uppercase tracking-[0.2em] font-bold text-primary mb-4 block">Engineered Protection</span>
+<h1 class="text-5xl md:text-6xl font-extrabold text-on-surface tracking-tighter leading-tight mb-6">
+                Predictable pricing for <br/><span class="text-primary">infrastructure defense.</span>
+</h1>
+<p class="text-lg text-on-surface-variant leading-relaxed">
+                Choose the architectural foundation that aligns with your security posture. From independent research to global portfolio management.
+            </p>
+</header>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-0 md:gap-4 lg:gap-8 items-stretch mb-32">
+<div class="bg-surface-container-lowest p-8 flex flex-col sentinel-shadow border-l-2 border-transparent transition-all duration-300 hover:scale-[1.01]">
+<div class="mb-8">
+<h3 class="text-sm font-bold uppercase tracking-widest text-on-surface-variant mb-2">Community</h3>
+<div class="flex items-baseline gap-1">
+<span class="text-4xl font-extrabold tracking-tighter text-on-surface">$0</span>
+<span class="text-on-surface-variant text-sm">/forever</span>
+</div>
+<p class="mt-4 text-sm text-on-surface-variant leading-relaxed">Essential security scanners for independent developers and open-source projects.</p>
+</div>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary-fixed-dim text-lg" data-icon="check_circle">check_circle</span>
+<span>Self-hosted infrastructure</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary-fixed-dim text-lg" data-icon="check_circle">check_circle</span>
+<span>Automated scanning</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary-fixed-dim text-lg" data-icon="check_circle">check_circle</span>
+<span>Single triage workflow</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary-fixed-dim text-lg" data-icon="check_circle">check_circle</span>
+<span>3 policy presets</span>
+</li>
+</ul>
+<button class="w-full py-4 text-sm font-bold uppercase tracking-widest bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-all rounded-sm">
+                    Get Started
+                </button>
+</div>
+<div class="bg-surface-container-lowest p-8 flex flex-col sentinel-shadow border-l-2 border-primary relative z-10 scale-105 shadow-2xl transition-all duration-300">
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary text-white px-4 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full">
+                    Most Popular
+                </div>
+<div class="mb-8">
+<h3 class="text-sm font-bold uppercase tracking-widest text-primary mb-2">Pro</h3>
+<div class="flex items-baseline gap-1">
+<span class="text-4xl font-extrabold tracking-tighter text-on-surface">$69</span>
+<span class="text-on-surface-variant text-sm">/dev/year</span>
+</div>
+<p class="mt-4 text-sm text-on-surface-variant leading-relaxed">Advanced vulnerability management for scaling teams requiring high-fidelity reporting.</p>
+</div>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-semibold text-on-surface">SaaS or Self-hosted</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>Bulk triage operations</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>Unlimited custom policies</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>Professional PDF reports</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>Daily email digests</span>
+</li>
+</ul>
+<button class="w-full py-4 text-sm font-bold uppercase tracking-widest primary-gradient text-white transition-all rounded-sm hover:opacity-90 active:scale-95">
+                    Upgrade to Pro
+                </button>
+</div>
+<div class="bg-surface-container-lowest p-8 flex flex-col sentinel-shadow border-l-2 border-transparent transition-all duration-300 hover:scale-[1.01]">
+<div class="mb-8">
+<h3 class="text-sm font-bold uppercase tracking-widest text-on-surface-variant mb-2">Enterprise</h3>
+<div class="flex items-baseline gap-1">
+<span class="text-4xl font-extrabold tracking-tighter text-on-surface">Custom</span>
+</div>
+<p class="mt-4 text-sm text-on-surface-variant leading-relaxed">Comprehensive governance and compliance for large-scale engineering organizations.</p>
+</div>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="verified">verified</span>
+<span>Portfolio management</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="verified">verified</span>
+<span>SSO / SAML (WorkOS)</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="verified">verified</span>
+<span>Advanced RBAC controls</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="verified">verified</span>
+<span>OWASP/CWE Compliance</span>
+</li>
+<li class="flex items-start gap-3 text-sm">
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="verified">verified</span>
+<span>Dedicated MCP server</span>
+</li>
+</ul>
+<button class="w-full py-4 text-sm font-bold uppercase tracking-widest border border-primary text-primary hover:bg-primary-fixed transition-all rounded-sm">
+                    Contact Sales
+                </button>
+</div>
+</div>
+<section class="mb-32">
+<h2 class="text-2xl font-extrabold tracking-tight text-on-surface mb-12 text-center">In-Depth Comparison</h2>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b-2 border-primary/10">
+<th class="py-6 px-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Capability</th>
+<th class="py-6 px-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Community</th>
+<th class="py-6 px-4 text-xs font-bold uppercase tracking-widest text-primary">Pro</th>
+<th class="py-6 px-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Enterprise</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-5 px-4 text-sm font-semibold">Deployment Options</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">Self-hosted</td>
+<td class="py-5 px-4 text-sm font-medium text-primary">SaaS + Self-hosted</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">Full Portfolio Control</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="py-5 px-4 text-sm font-semibold">Identity Management</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">Local Auth</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">OAuth 2.0</td>
+<td class="py-5 px-4 text-sm font-medium text-primary">SAML / SSO / SCIM</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="py-5 px-4 text-sm font-semibold">Policy Customization</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">3 Presets</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">Unlimited</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">Global Sync Policies</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="py-5 px-4 text-sm font-semibold">Integrations</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">GitHub Actions</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">CI/CD Full Stack</td>
+<td class="py-5 px-4 text-sm font-medium text-primary">MCP Server + Custom API</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="py-5 px-4 text-sm font-semibold">Compliance Reporting</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">—</td>
+<td class="py-5 px-4 text-sm text-on-surface-variant">Standard Reports</td>
+<td class="py-5 px-4 text-sm font-medium text-primary">Audit-Ready Exports</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-32">
+<div class="bg-surface-container-low p-10 flex flex-col justify-center border-l-4 border-tertiary">
+<h3 class="text-2xl font-bold tracking-tight mb-4">Dedicated Security Partner?</h3>
+<p class="text-on-surface-variant mb-6">Our Enterprise tier includes a dedicated security architect to help you map VigilWeave policies to your specific internal governance requirements.</p>
+<a class="text-tertiary font-bold text-sm uppercase tracking-widest flex items-center gap-2 hover:gap-4 transition-all" href="#">
+                    Request Architectural Review <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+<div class="p-10 flex flex-col justify-center bg-primary text-white">
+<h3 class="text-2xl font-bold tracking-tight mb-4">Ready to scan?</h3>
+<p class="opacity-80 mb-6">Deploy VigilWeave in less than 5 minutes. Start securing your infrastructure today with our Community edition.</p>
+<div class="flex gap-4">
+<button class="bg-white text-primary px-6 py-3 font-bold text-xs uppercase tracking-widest rounded-sm">Quick Install</button>
+<button class="border border-white/30 text-white px-6 py-3 font-bold text-xs uppercase tracking-widest rounded-sm hover:bg-white/10">Documentation</button>
+</div>
+</div>
+</section>
+</main>
+<footer class="w-full py-12 mt-auto bg-[#f7f9fb] dark:bg-slate-950 border-t border-[#c4c5d5]/15">
+<div class="flex flex-col md:flex-row justify-between items-center px-8 gap-6 max-w-7xl mx-auto">
+<div class="flex flex-col items-center md:items-start gap-2">
+<span class="font-bold text-[#191c1e] dark:text-white text-lg tracking-tighter">VigilWeave Sentinel</span>
+<span class="text-xs uppercase tracking-widest font-['Plus_Jakarta_Sans'] text-[#444653]">© 2024 VigilWeave Sentinel. All rights reserved.</span>
+</div>
+<div class="flex flex-wrap justify-center gap-8">
+<a class="text-xs uppercase tracking-widest font-['Plus_Jakarta_Sans'] text-[#444653] dark:text-slate-500 hover:text-[#191c1e] hover:underline transition-all" href="#">Privacy Policy</a>
+<a class="text-xs uppercase tracking-widest font-['Plus_Jakarta_Sans'] text-[#444653] dark:text-slate-500 hover:text-[#191c1e] hover:underline transition-all" href="#">Terms of Service</a>
+<a class="text-xs uppercase tracking-widest font-['Plus_Jakarta_Sans'] text-[#444653] dark:text-slate-500 hover:text-[#191c1e] hover:underline transition-all" href="#">Security Architecture</a>
+<a class="text-xs uppercase tracking-widest font-['Plus_Jakarta_Sans'] text-[#444653] dark:text-slate-500 hover:text-[#191c1e] hover:underline transition-all" href="#">Trust Center</a>
+</div>
+</div>
+</footer>
+</body></html>

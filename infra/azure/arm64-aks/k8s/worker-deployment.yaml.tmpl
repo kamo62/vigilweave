@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: vigilweave
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: vigilweave
+spec:
+  replicas: ${WORKER_REPLICAS}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker
+        app.kubernetes.io/part-of: vigilweave
+    spec:
+      containers:
+        - name: worker
+          image: ${API_IMAGE}
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - app.core.celery_app.celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency=${CELERY_CONCURRENCY}
+          envFrom:
+            - configMapRef:
+                name: vigilweave-config
+            - secretRef:
+                name: vigilweave-secrets
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 6Gi
