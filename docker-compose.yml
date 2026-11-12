@@ -1,0 +1,75 @@
+services:
+  redis:
+    image: redis:7-alpine
+    platform: linux/arm64
+    ports:
+      - "6379:6379"
+
+  api:
+    platform: linux/arm64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-base
+    environment:
+      DATABASE_URL: sqlite:////data/vigilweave.db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      HOST_REPO_ROOT: ${VIGILWEAVE_HOST_REPO_ROOT:-}
+      CONTAINER_REPO_ROOT: ${VIGILWEAVE_CONTAINER_REPO_ROOT:-/workspace}
+      SESSION_AUTH_PROVIDER: ${SESSION_AUTH_PROVIDER:-local}
+      API_KEYS_ENABLED: ${API_KEYS_ENABLED:-true}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      VIGILWEAVE_WEB_BASE_URL: ${VIGILWEAVE_WEB_BASE_URL:-http://localhost:${FRONTEND_HOST_PORT:-8080}}
+    volumes:
+      # Preserve the legacy named volume for one migration cycle so existing
+      # self-hosted installs can see /data/codeguard.db and copy it to
+      # /data/vigilweave.db on first startup.
+      - codeguard_data:/data
+      - ${VIGILWEAVE_HOST_REPO_ROOT:-.}:${VIGILWEAVE_CONTAINER_REPO_ROOT:-/workspace}:ro
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    depends_on:
+      - redis
+
+  worker:
+    platform: linux/arm64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-base
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2}
+    environment:
+      DATABASE_URL: sqlite:////data/vigilweave.db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      TOOLCHAIN_PROFILE: ${TOOLCHAIN_PROFILE:-base}
+      HOST_REPO_ROOT: ${VIGILWEAVE_HOST_REPO_ROOT:-}
+      CONTAINER_REPO_ROOT: ${VIGILWEAVE_CONTAINER_REPO_ROOT:-/workspace}
+      SESSION_AUTH_PROVIDER: ${SESSION_AUTH_PROVIDER:-local}
+      API_KEYS_ENABLED: ${API_KEYS_ENABLED:-true}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+    volumes:
+      - codeguard_data:/data
+      - ${VIGILWEAVE_HOST_REPO_ROOT:-.}:${VIGILWEAVE_CONTAINER_REPO_ROOT:-/workspace}:ro
+    depends_on:
+      - redis
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+
+  frontend:
+    platform: linux/arm64
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_HOST_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  codeguard_data:

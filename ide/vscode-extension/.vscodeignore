@@ -1,0 +1,6 @@
+src/**
+scripts/**
+tsconfig.json
+bun.lock
+*.ts
+*.test.ts

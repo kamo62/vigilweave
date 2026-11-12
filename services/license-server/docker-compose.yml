@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  license-server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD to a URL-safe value}@db:5432/license_server
+      - ENVIRONMENT=production
+      - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET}
+      - CONFIG_ENCRYPTION_KEY=${CONFIG_ENCRYPTION_KEY:?set CONFIG_ENCRYPTION_KEY}
+      - OFFLINE_SIGNING_SECRET=${OFFLINE_SIGNING_SECRET:?set OFFLINE_SIGNING_SECRET}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-["http://localhost:8000"]}
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD to a URL-safe value}
+      - POSTGRES_DB=license_server
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+
+volumes:
+  postgres_data:

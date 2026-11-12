@@ -1,0 +1,71 @@
+tools:
+  gitleaks:
+    category: secrets
+    languages: ["all"]
+    enabled: true
+  semgrep:
+    category: security
+    languages: ["all"]
+    enabled: true
+  bandit:
+    category: security
+    languages: ["python"]
+    enabled: true
+  ruff:
+    category: quality
+    languages: ["python"]
+    enabled: true
+  eslint:
+    category: quality
+    languages: ["javascript", "typescript"]
+    enabled: true
+  checkov:
+    category: iac
+    languages: ["terraform", "cloudformation", "yaml", "dockerfile"]
+    enabled: true
+  tflint:
+    category: iac
+    languages: ["terraform"]
+    enabled: true
+  cfn-lint:
+    category: iac
+    languages: ["cloudformation"]
+    enabled: true
+  trivy:
+    category: container
+    languages: ["dockerfile", "terraform", "cloudformation", "yaml"]
+    enabled: true
+  sqlfluff:
+    category: quality
+    languages: ["sql", "plsql"]
+    enabled: true
+  swiftlint:
+    category: quality
+    languages: ["swift"]
+    enabled: true
+  detekt:
+    category: quality
+    languages: ["kotlin"]
+    enabled: true
+  android-lint:
+    category: quality
+    languages: ["kotlin", "java", "xml"]
+    enabled: true
+  dotnet-analyzers:
+    category: quality
+    languages: ["csharp"]
+    enabled: true
+  grype:
+    category: sca
+    languages: ["python", "javascript", "typescript", "go", "rust", "java", "kotlin", "csharp", "ruby", "php"]
+    enabled: true
+
+scan_types:
+  comprehensive:
+    categories: ["security", "secrets", "quality", "iac", "container", "sca"]
+  fast:
+    tools: ["semgrep", "bandit", "ruff", "eslint", "sqlfluff"]
+  security-only:
+    categories: ["security", "secrets", "iac", "container"]
+  custom:
+    tools: []

@@ -1,0 +1,34 @@
+{
+  "manifestVersion": 1,
+  "id": "vigilweave-azure-devops",
+  "name": "VigilWeave Azure DevOps",
+  "publisher": "vigilweave",
+  "version": "2.0.0",
+  "description": "Azure DevOps extension providing the VigilWeave scan task.",
+  "categories": [
+    "Azure Pipelines"
+  ],
+  "targets": [
+    {
+      "id": "Microsoft.VisualStudio.Services"
+    }
+  ],
+  "files": [
+    {
+      "path": "VigilWeaveScan",
+      "addressable": true
+    }
+  ],
+  "contributions": [
+    {
+      "id": "vigilweave-scan-task",
+      "type": "ms.vss-distributed-task.task",
+      "targets": [
+        "ms.vss-distributed-task.tasks"
+      ],
+      "properties": {
+        "name": "VigilWeaveScan"
+      }
+    }
+  ]
+}

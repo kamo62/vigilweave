@@ -1,0 +1,25 @@
+{
+  "language": "python",
+  "profile_name": null,
+  "rules": [
+    {
+      "category": "maintainability",
+      "description": null,
+      "enabled": true,
+      "language": "python",
+      "severity": "Medium",
+      "source": "sonarqube",
+      "source_repository": "python",
+      "source_rule_key": "python:S100",
+      "tags": [
+        "maintainability",
+        "convention",
+        "brain-overload"
+      ],
+      "title": "Functions should have descriptive names",
+      "vigilweave_rule_id": "sonarqube:python:python:s100"
+    }
+  ],
+  "source": "sonarqube",
+  "updated_at": "2026-03-24T02:37:54.352388+00:00"
+}
