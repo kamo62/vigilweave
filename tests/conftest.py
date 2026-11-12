@@ -1,3 +1,5 @@
+"""Shared fixtures use synthetic accounts, passwords, tokens, and test licence keys only."""
+
 import hashlib
 import hmac
 import json

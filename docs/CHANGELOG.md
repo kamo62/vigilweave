@@ -6,6 +6,9 @@ Implementation updates for VigilWeave. For setup, see [README.md](../README.md).
 
 ## 2026-11-12: Public educational test application
 
+- Removed unused Azure deployment scripts and their environment template, plus the unused findings mockup and screenshot with a production-looking example key.
+- Standardised documentation credentials as explicit placeholders and synthetic email addresses under `example.com`.
+- Labelled retained authentication and licence test fixtures as synthetic data.
 - Documented VigilWeave's educational purpose for learning how tools such as SonarQube work.
 - Removed commercial funding links.
 - Retained the MIT licence and the existing application behaviour.

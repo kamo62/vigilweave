@@ -64,14 +64,14 @@ docker compose up -d`}</pre>
         </p>
         <div className="code-block">
           <pre>{`# Database
-DATABASE_URL=postgresql://vigilweave:vigilweave@db:5432/vigilweave
+DATABASE_URL=sqlite:///./vigilweave.db
 
 # API server
 API_HOST=0.0.0.0
 API_PORT=8000
 SESSION_AUTH_PROVIDER=local
 API_KEYS_ENABLED=true
-SESSION_SECRET=change-me-to-a-random-string
+SESSION_SECRET=YOUR_SESSION_SECRET_HERE
 
 # Git repository integration (optional)
 GITHUB_APP_ID=
@@ -89,7 +89,8 @@ WORKOS_CLIENT_ID=`}</pre>
           <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
             SESSION_SECRET
           </code>{" "}
-          to a secure random value before deploying to production.
+          to a secure random value before starting the application. All YOUR_..._HERE
+          values are placeholders, not credentials.
         </p>
       </section>
 
@@ -134,7 +135,7 @@ WORKOS_CLIENT_ID=`}</pre>
 
 # Or via the API
 curl -X POST http://localhost:8000/api/v1/scans \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "project_id": "proj_abc123",

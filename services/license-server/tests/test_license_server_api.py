@@ -1,3 +1,5 @@
+"""API tests using synthetic accounts, passwords, secrets, and locally issued licence keys."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -39,7 +41,7 @@ def bootstrap_admin(client: TestClient) -> dict:
         "/api/auth/bootstrap",
         json={
             "email": "admin@example.com",
-            "password": "super-secure-password",
+            "password": "example-password-not-a-real-secret",
             "name": "Primary Admin",
         },
     )
@@ -67,7 +69,7 @@ def test_bootstrap_login_logout_and_audit_log(license_server):
 
     login = client.post(
         "/api/auth/login",
-        json={"email": "admin@example.com", "password": "super-secure-password"},
+        json={"email": "admin@example.com", "password": "example-password-not-a-real-secret"},
     )
     assert login.status_code == 200
 

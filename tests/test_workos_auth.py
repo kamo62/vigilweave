@@ -1,3 +1,5 @@
+"""WorkOS tests using synthetic example.com accounts and test-only credentials."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -166,12 +168,12 @@ def test_bootstrap_platform_operator_email_is_persisted(api_client, monkeypatch)
     monkeypatch.setattr(settings, "saas_enabled", True)
     monkeypatch.setattr(settings, "auth_mode", "workos")
     monkeypatch.setattr(settings, "vigilweave_web_base_url", "https://app.vigilweave.com")
-    monkeypatch.setattr(settings, "saas_bootstrap_platform_admin_emails", ["owner@vigilweave.com"])
+    monkeypatch.setattr(settings, "saas_bootstrap_platform_admin_emails", ["owner@example.com"])
 
     with Session(database_module.engine) as session:
         operator = SimpleNamespace(
             id="user_platform_owner",
-            email="owner@vigilweave.com",
+            email="owner@example.com",
             first_name="Owner",
             name="Owner Example",
             organization_id="org_vigilweave",
@@ -300,11 +302,11 @@ def test_platform_operator_can_assign_tenant_license(api_client, monkeypatch) ->
     monkeypatch.setattr(settings, "license_key", None)
     monkeypatch.setattr(settings, "vigilweave_web_base_url", "https://app.vigilweave.com")
     monkeypatch.setattr(settings, "session_secret", "test-session-secret")
-    monkeypatch.setattr(settings, "saas_operator_emails", ["owner@vigilweave.com"])
+    monkeypatch.setattr(settings, "saas_operator_emails", ["owner@example.com"])
 
     with Session(database_module.engine) as session:
         tenant_user = User(
-            email="member@acme.com",
+            email="member@example.com",
             tenant_slug="workos-org-acme",
             auth_provider="workos",
             workos_user_id="user_acme",
@@ -315,7 +317,7 @@ def test_platform_operator_can_assign_tenant_license(api_client, monkeypatch) ->
 
     operator = SimpleNamespace(
         id=1,
-        email="owner@vigilweave.com",
+        email="owner@example.com",
         tenant_slug="workos-org-owner",
         auth_provider=AuthProvider.WORKOS,
         role=UserRole.ADMIN,
@@ -336,7 +338,7 @@ def test_platform_operator_can_assign_tenant_license(api_client, monkeypatch) ->
     assert payload["tenant_slug"] == "workos-org-acme"
     assert payload["tier"] == "pro"
     assert payload["source"] == "override"
-    assert payload["assigned_by"] == "owner@vigilweave.com"
+    assert payload["assigned_by"] == "owner@example.com"
 
     listing = api_client.get("/api/v1/saas-admin/tenant-licenses")
 
@@ -358,7 +360,7 @@ def test_platform_operator_can_promote_another_operator(api_client, monkeypatch)
 
     with Session(database_module.engine) as session:
         target_user = User(
-            email="ops2@vigilweave.com",
+            email="ops2@example.com",
             tenant_slug="workos-org-vigilweave",
             auth_provider="workos",
             workos_user_id="user_ops2",
@@ -371,7 +373,7 @@ def test_platform_operator_can_promote_another_operator(api_client, monkeypatch)
 
     operator = SimpleNamespace(
         id=1,
-        email="owner@vigilweave.com",
+        email="owner@example.com",
         tenant_slug="workos-org-owner",
         auth_provider=AuthProvider.WORKOS,
         role=UserRole.ADMIN,

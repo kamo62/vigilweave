@@ -91,6 +91,9 @@ kubectl apply -f namespace.yaml
 
 ## 3. Secrets
 
+This is an example only. Replace every `YOUR_..._HERE` placeholder locally before applying
+the manifest. Generate fresh secrets for your own environment and do not commit the completed file.
+
 ```yaml
 # secrets.yaml
 apiVersion: v1
@@ -101,17 +104,17 @@ metadata:
 type: Opaque
 stringData:
   # Required — generate with: openssl rand -hex 32
-  SESSION_SECRET: "CHANGE-ME-generate-a-random-hex-string"
+  SESSION_SECRET: "YOUR_SESSION_SECRET_HERE"
 
   # Required — PostgreSQL connection string
-  DATABASE_URL: "postgresql://vigilweave:password@postgres-host:5432/vigilweave"
+  DATABASE_URL: "YOUR_DATABASE_URL_HERE"
 
   # Optional — commercial license key (omit for Community tier)
-  # LICENSE_KEY: "vw-pro-xxxx-xxxx-xxxx"
+  # LICENSE_KEY: "YOUR_LICENSE_KEY_HERE"
 
   # Optional — WorkOS credentials (for SaaS/Enterprise SSO)
-  # WORKOS_API_KEY: "sk_live_..."
-  # WORKOS_CLIENT_ID: "client_..."
+  # WORKOS_API_KEY: "YOUR_WORKOS_API_KEY_HERE"
+  # WORKOS_CLIENT_ID: "YOUR_WORKOS_CLIENT_ID_HERE"
 ```
 
 ```bash
@@ -554,8 +557,8 @@ data:
 
 ```yaml
 stringData:
-  WORKOS_API_KEY: "sk_live_..."
-  WORKOS_CLIENT_ID: "client_..."
+  WORKOS_API_KEY: "YOUR_WORKOS_API_KEY_HERE"
+  WORKOS_CLIENT_ID: "YOUR_WORKOS_CLIENT_ID_HERE"
   WORKOS_REDIRECT_URI: "https://vigilweave.your-domain.com/api/v1/auth/callback"
 ```
 

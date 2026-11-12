@@ -29,5 +29,5 @@ ide/vscode-extension/packaged/
 infra/azure/arm64-aks/.env.generated
 
 # Local planning documents (not published)
-/Task.md
-/Tasks.md
+/[Tt]ask.md
+/[Tt]asks.md

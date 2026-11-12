@@ -21,7 +21,7 @@ export function ReportsAnalytics() {
         <div className="code-block">
           <pre>{`# Generate a PDF report for a specific scan
 curl -X GET http://localhost:8000/api/v1/scans/{scan_id}/report/pdf \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -o scan-report.pdf
 `}</pre>
         </div>
@@ -42,7 +42,7 @@ curl -X GET http://localhost:8000/api/v1/scans/{scan_id}/report/pdf \\
         <div className="code-block">
           <pre>{`# Export findings as CSV
 curl -X GET "http://localhost:8000/api/v1/scans/{scan_id}/findings/export" \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -o findings.csv`}</pre>
         </div>
         <p className="text-sm text-muted-foreground">

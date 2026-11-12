@@ -1,4 +1,7 @@
-"""Tests for license verification system."""
+"""Licence verification tests using synthetic keys, never issued deployment credentials.
+
+Parser fixtures deliberately retain valid key shapes to exercise the actual format.
+"""
 
 from __future__ import annotations
 
