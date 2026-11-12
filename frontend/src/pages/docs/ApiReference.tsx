@@ -52,7 +52,7 @@ export function ApiReference() {
         </p>
         <div className="code-block">
           <pre>{`# Include the API key in the Authorization header
-curl -H "Authorization: Bearer vw_sk_live_abc123def456" \\
+curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   http://localhost:8000/api/v1/projects`}</pre>
         </div>
         <div className="rounded-sm border border-yellow-500/30 bg-yellow-500/5 p-4 space-y-1">
@@ -89,7 +89,7 @@ https://app.vigilweave.com/api/v1`}</pre>
             </div>
             <p className="text-sm text-muted-foreground">List all projects accessible to the authenticated user.</p>
             <div className="code-block">
-              <pre>{`curl -H "Authorization: Bearer vw_your_api_key" \\
+              <pre>{`curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   http://localhost:8000/api/v1/projects
 
 # Response
@@ -117,7 +117,7 @@ https://app.vigilweave.com/api/v1`}</pre>
             <p className="text-sm text-muted-foreground">Create a new project.</p>
             <div className="code-block">
               <pre>{`curl -X POST http://localhost:8000/api/v1/projects \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "payments-api",
@@ -142,7 +142,7 @@ https://app.vigilweave.com/api/v1`}</pre>
             <p className="text-sm text-muted-foreground">Trigger a new scan for a project.</p>
             <div className="code-block">
               <pre>{`curl -X POST http://localhost:8000/api/v1/scans \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "project_id": "proj_abc123",
@@ -168,7 +168,7 @@ https://app.vigilweave.com/api/v1`}</pre>
             </div>
             <p className="text-sm text-muted-foreground">Get scan details and status.</p>
             <div className="code-block">
-              <pre>{`curl -H "Authorization: Bearer vw_your_api_key" \\
+              <pre>{`curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   http://localhost:8000/api/v1/scans/scan_xyz789
 
 # Response
@@ -208,7 +208,7 @@ https://app.vigilweave.com/api/v1`}</pre>
           </p>
           <div className="code-block">
             <pre>{`# List critical and high findings for a project
-curl -H "Authorization: Bearer vw_your_api_key" \\
+curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   "http://localhost:8000/api/v1/findings?project_id=proj_abc123&severity=critical,high&status=open"
 
 # Response

@@ -16,6 +16,6 @@ export const LICENSING_URL =
 export const CONTACT_URL =
   import.meta.env.VITE_CONTACT_URL ?? "https://vigilweave.com/contact";
 export const SALES_EMAIL_URL =
-  import.meta.env.VITE_SALES_EMAIL_URL ?? "mailto:sales@vigilweave.com";
+  import.meta.env.VITE_SALES_EMAIL_URL ?? "mailto:sales@example.com";
 export const SUPPORT_EMAIL_URL =
-  import.meta.env.VITE_SUPPORT_EMAIL_URL ?? "mailto:support@vigilweave.com";
+  import.meta.env.VITE_SUPPORT_EMAIL_URL ?? "mailto:support@example.com";

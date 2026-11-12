@@ -105,7 +105,7 @@ code --install-extension vigilweave.vigilweave-vscode`}</pre>
       "command": "npx",
       "args": ["-y", "@vigilweave/mcp-server"],
       "env": {
-        "VIGILWEAVE_API_KEY": "vw_your_api_key",
+        "VIGILWEAVE_API_KEY": "YOUR_API_KEY_HERE",
         "VIGILWEAVE_API_URL": "http://localhost:8000"
       }
     }
@@ -243,14 +243,14 @@ code --install-extension vigilweave.vigilweave-vscode`}</pre>
         <div className="code-block">
           <pre>{`# Configure Prisma Cloud integration
 curl -X POST http://localhost:8000/api/v1/integrations \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "type": "prisma_cloud",
     "config": {
       "api_url": "https://api.prismacloud.io",
-      "access_key": "your-prisma-access-key",
-      "secret_key": "your-prisma-secret-key",
+      "access_key": "YOUR_PRISMA_ACCESS_KEY_HERE",
+      "secret_key": "YOUR_PRISMA_SECRET_KEY_HERE",
       "sync_interval_minutes": 30
     }
   }'`}</pre>
@@ -268,11 +268,11 @@ curl -X POST http://localhost:8000/api/v1/integrations \\
         <div className="code-block">
           <pre>{`# Import SonarQube rules
 curl -X POST http://localhost:8000/api/v1/integrations/sonarqube/import \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "sonarqube_url": "https://sonar.example.com",
-    "token": "squ_your_sonarqube_token",
+    "token": "YOUR_SONARQUBE_TOKEN_HERE",
     "quality_profile": "your-profile-name",
     "language": "python"
   }'`}</pre>

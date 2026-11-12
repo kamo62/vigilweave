@@ -35,7 +35,8 @@ export function RefundPolicyPage(): JSX.Element {
 
       <h2>5. Requesting a Refund</h2>
       <p>
-        To request a refund, contact billing@vigilweave.com with the purchasing email, organization name, and the
+        Example billing contact: billing@example.com (a placeholder, not a monitored inbox).
+        A refund request would include the purchasing email, organization name, and the
         reason for the request.
       </p>
     </LegalPageShell>

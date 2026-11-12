@@ -59,11 +59,11 @@ export function RulesCustomization() {
           </h4>
           <div className="code-block">
             <pre>{`curl -X POST http://localhost:8000/api/v1/integrations/sonarqube/import \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "sonarqube_url": "https://sonar.example.com",
-    "token": "squ_your_sonarqube_token",
+    "token": "YOUR_SONARQUBE_TOKEN_HERE",
     "quality_profile": "your-profile-name",
     "language": "python"
   }'`}</pre>
@@ -227,7 +227,7 @@ export function RulesCustomization() {
           <div className="code-block">
             <pre>{`# Upload a custom rule pack
 curl -X POST http://localhost:8000/api/v1/rulepacks \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d @my-org-python-rules.json`}</pre>
           </div>

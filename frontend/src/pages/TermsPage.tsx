@@ -53,7 +53,7 @@ export function TermsPage(): JSX.Element {
 
       <h2>8. Contact</h2>
       <p>
-        Questions about these terms may be sent to support@vigilweave.com.
+        Example support contact: support@example.com. This is a placeholder, not a monitored inbox.
       </p>
     </LegalPageShell>
   )
