@@ -387,10 +387,10 @@ docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
 SESSION_AUTH_PROVIDER=workos
 API_KEYS_ENABLED=true
 SAAS_ENABLED=true
-WORKOS_API_KEY=sk_live_...
-WORKOS_CLIENT_ID=client_...
+WORKOS_API_KEY=YOUR_WORKOS_API_KEY_HERE
+WORKOS_CLIENT_ID=YOUR_WORKOS_CLIENT_ID_HERE
 WORKOS_REDIRECT_URI=https://your-domain.com/api/v1/auth/callback
-SESSION_SECRET=change-me-to-a-random-string`}</pre>
+SESSION_SECRET=YOUR_SESSION_SECRET_HERE`}</pre>
         </div>
         <p className="text-muted-foreground">
           Commercial deployments typically also include:
@@ -456,7 +456,7 @@ scrape_configs:
             API:
           </p>
           <div className="code-block">
-            <pre>{`curl -H "Authorization: Bearer vw_your_api_key" \\
+            <pre>{`curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   http://localhost:8000/api/v1/system/tool-telemetry`}</pre>
           </div>
         </div>

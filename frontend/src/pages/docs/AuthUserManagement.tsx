@@ -600,18 +600,18 @@ export function AuthUserManagement() {
           </p>
           <div className="code-block">
             <pre>{`# List all users in your tenant
-curl -H "Authorization: Bearer vw_your_api_key" \\
+curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   https://app.vigilweave.com/api/v1/auth/users
 
 # Promote a user to admin
 curl -X PATCH https://app.vigilweave.com/api/v1/auth/users/42/role \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{"role": "admin"}'
 
 # Remove a user
 curl -X DELETE https://app.vigilweave.com/api/v1/auth/users/42 \\
-  -H "Authorization: Bearer vw_your_api_key"`}</pre>
+  -H "Authorization: Bearer YOUR_API_KEY_HERE"`}</pre>
           </div>
         </div>
       </section>
@@ -677,7 +677,7 @@ curl -X DELETE https://app.vigilweave.com/api/v1/auth/users/42 \\
         </ul>
         <div className="code-block">
           <pre>{`# Use API key in CI/CD
-curl -H "Authorization: Bearer vw_sk_live_abc123def456" \\
+curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "X-VigilWeave-Tenant: my-org" \\
   https://app.vigilweave.com/api/v1/scans`}</pre>
         </div>

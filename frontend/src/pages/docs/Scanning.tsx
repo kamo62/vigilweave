@@ -198,7 +198,7 @@ export function Scanning() {
           <div className="code-block">
             <pre>{`# Bulk triage findings
 curl -X POST https://app.vigilweave.com/api/v1/scans/42/findings/bulk-triage \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "finding_ids": [101, 102, 103, 104],
@@ -221,7 +221,7 @@ curl -X POST https://app.vigilweave.com/api/v1/scans/42/findings/bulk-triage \\
         <div className="code-block">
           <pre>{`# Export scan results as SARIF
 curl -X GET http://localhost:8000/api/v1/scans/{scan_id}/sarif \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -o results.sarif.json
 
 # Upload to GitHub Code Scanning

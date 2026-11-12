@@ -193,34 +193,34 @@ export function ScmConnections() {
         </h3>
         <div className="code-block">
           <pre>{`# List connections
-curl -H "Authorization: Bearer vw_your_api_key" \\
+curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   http://localhost:8000/api/v1/scm-connections
 
 # Create a connection
 curl -X POST http://localhost:8000/api/v1/scm-connections \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "GitHub - MyOrg",
     "provider": "github",
-    "token": "ghp_your_token_here"
+    "token": "YOUR_SCM_TOKEN_HERE"
   }'
 
 # Test a connection
 curl -X POST http://localhost:8000/api/v1/scm-connections/1/test \\
-  -H "Authorization: Bearer vw_your_api_key"
+  -H "Authorization: Bearer YOUR_API_KEY_HERE"
 
 # List organizations for a connection
-curl -H "Authorization: Bearer vw_your_api_key" \\
+curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   http://localhost:8000/api/v1/scm-connections/1/organizations
 
 # List repositories for an organization
-curl -H "Authorization: Bearer vw_your_api_key" \\
+curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   "http://localhost:8000/api/v1/scm-connections/1/repositories?org=my-org"
 
 # Import repositories
 curl -X POST http://localhost:8000/api/v1/scm-connections/1/import \\
-  -H "Authorization: Bearer vw_your_api_key" \\
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
     "repos": [
