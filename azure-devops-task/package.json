@@ -1,0 +1,21 @@
+{
+  "name": "azure-devops-task",
+  "private": true,
+  "version": "2.0.0",
+  "license": "MIT",
+  "description": "Azure DevOps task for running VigilWeave scans",
+  "scripts": {
+    "build": "rm -rf dist VigilWeaveScan && tsc -p tsconfig.json && mkdir -p VigilWeaveScan && cp -R dist VigilWeaveScan/dist && cp task.json VigilWeaveScan/task.json",
+    "package": "mkdir -p packaged && tfx extension create --manifest-globs vss-extension.json --output-path packaged",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "azure-pipelines-task-lib": "5.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "25.5.0",
+    "tfx-cli": "0.23.1",
+    "typescript": "5.9.3"
+  }
+}

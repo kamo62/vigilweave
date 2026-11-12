@@ -1,0 +1,294 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ── HeroUI v3: theme + public-page components ── */
+@import "@heroui/styles/themes/default/variables.css";
+@import "@heroui/styles/themes/shared/theme.css";
+@import "@heroui/styles/utilities";
+@import "@heroui/styles/variants";
+@import "@heroui/styles/components/button.css";
+@import "@heroui/styles/components/card.css";
+@import "@heroui/styles/components/chip.css";
+@import "@heroui/styles/components/link.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ── App theme (unlayered — overrides HeroUI's @layer base defaults) ── */
+
+:root {
+  --radius: 0.125rem;
+  /* Sentinel Core — light palette (validated against Stitch designs) */
+  --background: #f7f9fb;
+  --foreground: #191c1e;
+  --card: #ffffff;
+  --card-foreground: #191c1e;
+  --popover: #ffffff;
+  --popover-foreground: #191c1e;
+  --primary: #1e40af;
+  --primary-foreground: #ffffff;
+  --secondary: #e6e8ea;
+  --secondary-foreground: #191c1e;
+  --muted: #f2f4f6;
+  --muted-foreground: #444653;
+  --accent: #eceef0;
+  --accent-foreground: #191c1e;
+  --destructive: #ba1a1a;
+  --destructive-foreground: #ffffff;
+  --success: #0d9488;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --danger: #ba1a1a;
+  --danger-foreground: #ffffff;
+  --border: #c4c5d5;
+  --input: #e0e3e5;
+  --ring: #1e40af;
+  --sidebar: #f2f4f6;
+  --sidebar-foreground: #191c1e;
+  --sidebar-primary: #1e40af;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e6e8ea;
+  --sidebar-accent-foreground: #191c1e;
+  --sidebar-border: rgba(196, 197, 213, 0.15);
+  --sidebar-ring: #1e40af;
+  --chart-1: #1e40af;
+  --chart-2: #0d9488;
+  --chart-3: #6b75a2;
+  --chart-4: #d97706;
+  --chart-5: #ba1a1a;
+
+  /* Code block tokens (GitHub Light style) */
+  --code-bg: #f6f8fa;
+  --code-fg: #24292f;
+  --code-border: #d1d5db;
+  --code-command: #0550ae;
+  --code-string: #0a3069;
+  --code-comment: #6e7781;
+  --code-keyword: #8250df;
+  --code-output: #57606a;
+  --code-highlight: #9a6700;
+
+  /* HeroUI surface tokens → Sentinel Core palette */
+  --surface: var(--card);
+  --surface-foreground: var(--card-foreground);
+  --surface-secondary: #f2f4f6;
+  --surface-tertiary: #eceef0;
+  --overlay: var(--popover);
+  --overlay-foreground: var(--popover-foreground);
+  --default: var(--secondary);
+  --default-foreground: var(--secondary-foreground);
+  --focus: var(--ring);
+  --link: var(--foreground);
+  --separator: var(--border);
+  --segment: #f7f9fb;
+  --segment-foreground: var(--foreground);
+  --surface-shadow: 0 12px 32px -4px rgba(25, 28, 30, 0.06);
+  --overlay-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.06), 0 14px 28px 0 rgba(0, 0, 0, 0.08);
+  --field-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+}
+
+.dark {
+  /* Sentinel Core — dark palette (validated against dark-mode artifact) */
+  --background: #111318;
+  --foreground: #e0e3e5;
+  --card: #1a1d24;
+  --card-foreground: #e0e3e5;
+  --popover: #1e2129;
+  --popover-foreground: #e0e3e5;
+  --primary: #8ba4e8;
+  --primary-foreground: #001453;
+  --secondary: #2a2d35;
+  --secondary-foreground: #e0e3e5;
+  --muted: #2a2d35;
+  --muted-foreground: #8b8d9a;
+  --accent: #32353e;
+  --accent-foreground: #e0e3e5;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #ffffff;
+  --success: #6bd8cb;
+  --success-foreground: #00201d;
+  --warning: #fbbf24;
+  --warning-foreground: #1a1d24;
+  --danger: #ff6b6b;
+  --danger-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.10);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #8ba4e8;
+  --sidebar: #161920;
+  --sidebar-foreground: #e0e3e5;
+  --sidebar-primary: #8ba4e8;
+  --sidebar-primary-foreground: #001453;
+  --sidebar-accent: #2a2d35;
+  --sidebar-accent-foreground: #e0e3e5;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #8ba4e8;
+  --chart-1: #8ba4e8;
+  --chart-2: #6bd8cb;
+  --chart-3: #9da5c7;
+  --chart-4: #fbbf24;
+  --chart-5: #ff6b6b;
+
+  /* Code block tokens (GitHub Dark style) */
+  --code-bg: #0d1117;
+  --code-fg: #c9d1d9;
+  --code-border: rgba(255, 255, 255, 0.08);
+  --code-command: #79c0ff;
+  --code-string: #a5d6ff;
+  --code-comment: #8b949e;
+  --code-keyword: #d2a8ff;
+  --code-output: #8b949e;
+  --code-highlight: #ffa657;
+
+  /* HeroUI surface tokens — dark */
+  --surface: var(--card);
+  --surface-foreground: var(--card-foreground);
+  --surface-secondary: #22252d;
+  --surface-tertiary: #2a2d35;
+  --overlay: var(--popover);
+  --overlay-foreground: var(--popover-foreground);
+  --default: var(--secondary);
+  --default-foreground: var(--secondary-foreground);
+  --focus: var(--ring);
+  --link: var(--foreground);
+  --separator: rgba(255, 255, 255, 0.08);
+  --segment: #1e2129;
+  --segment-foreground: var(--foreground);
+  --surface-shadow: 0 0 0 0 transparent;
+  --overlay-shadow: 0 0 1px 0 rgba(255, 255, 255, 0.15);
+  --field-shadow: 0 0 0 0 transparent;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-background text-foreground;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+}
+
+/* ── HeroUI component overrides ── */
+
+/* Map HeroUI's primary button to our brand violet (HeroUI defaults to --accent) */
+.button--primary {
+  --button-bg: var(--color-primary);
+  --button-bg-hover: color-mix(in oklab, var(--primary) 88%, var(--primary-foreground) 12%);
+  --button-bg-pressed: color-mix(in oklab, var(--primary) 82%, var(--primary-foreground) 18%);
+  --button-fg: var(--color-primary-foreground);
+}
+
+/* Fix HeroUI card description: --muted is a bg color in our system, not a text color */
+.card__description {
+  color: var(--color-muted-foreground);
+}
+
+@layer utilities {
+  .animate-in-fade {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* ── Refined code blocks (replaces green-on-black terminal style) ── */
+
+.code-block {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--code-border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+.code-block .cmd  { color: var(--code-command); }
+.code-block .str  { color: var(--code-string); }
+.code-block .cmt  { color: var(--code-comment); }
+.code-block .kw   { color: var(--code-keyword); }
+.code-block .out  { color: var(--code-output); }
+.code-block .hl   { color: var(--code-highlight); }
+
+/* ── Brand gradients (centralized from hardcoded Tailwind arbitrary values) ── */
+
+.bg-brand-gradient {
+  background: linear-gradient(to right, #173bab, #00288e);
+}
+
+.bg-brand-gradient-wide {
+  background: linear-gradient(to right, #173bab, #1e40af, #0d9488);
+}
+
+.text-brand-gradient {
+  background: linear-gradient(to right, #173bab, #1e40af, #0d9488);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

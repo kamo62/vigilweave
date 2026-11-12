@@ -1,0 +1,60 @@
+name: 'VigilWeave Scan'
+description: 'Run a VigilWeave security and quality scan'
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  vigilweave_url:
+    description: 'Base URL of the VigilWeave API server'
+    required: true
+  api_key:
+    description: 'VigilWeave API key'
+    required: true
+  repo:
+    description: 'Repository identifier (defaults to GITHUB_REPOSITORY)'
+    required: false
+  branch:
+    description: 'Branch name (defaults to current branch)'
+    required: false
+  commit:
+    description: 'Commit SHA (defaults to GITHUB_SHA)'
+    required: false
+  scan_type:
+    description: 'Scan type: comprehensive, fast, security-only, custom'
+    required: false
+    default: 'comprehensive'
+  fail_on_critical:
+    description: 'Fail the action if critical findings are detected'
+    required: false
+    default: 'true'
+  fail_on_high:
+    description: 'Fail the action if high findings are detected'
+    required: false
+    default: 'false'
+  poll_interval:
+    description: 'Seconds between scan status polls'
+    required: false
+    default: '10'
+  timeout:
+    description: 'Maximum seconds to wait for scan completion'
+    required: false
+    default: '900'
+  github_token:
+    description: 'GitHub token for PR comments (defaults to github.token)'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  scan_id:
+    description: 'ID of the created scan'
+  quality_gate_passed:
+    description: 'Whether the quality gate passed'
+  total_findings:
+    description: 'Total number of findings'
+  sarif_path:
+    description: 'Path to the SARIF output file'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
