@@ -8,8 +8,8 @@
 import type { JSX, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 
-import { clearRuntimeAuthConfig, getCsrfToken, setCsrfToken } from "./auth";
-import { fetchCapabilities } from "./api";
+import { clearRuntimeAuthConfig, setCsrfToken } from "./auth";
+import { clearCsrfTokenCache, fetchCapabilities, fetchJson } from "./api";
 import { buildApiUrl } from "./api-url";
 import { buildLoginPath } from "./navigation";
 import {
@@ -56,6 +56,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         setUser(userData);
         return userData;
       } else if (response.status === 401) {
+        clearCsrfTokenCache();
         setUser(null);
         return null;
       }
@@ -184,19 +185,11 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
   const logout = useCallback(async () => {
     try {
-      const headers = new Headers();
-      const csrfToken = getCsrfToken();
-      if (csrfToken) {
-        headers.set("X-CSRF-Token", csrfToken);
-      }
-      await fetch(buildApiUrl("/api/v1/auth/logout"), {
-        method: "POST",
-        credentials: "include",
-        headers,
-      });
+      await fetchJson<void>("/api/v1/auth/logout", { method: "POST" }, "Logout failed");
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
+      clearCsrfTokenCache();
       setUser(null);
       clearRuntimeAuthConfig();
       if (sessionAuthProvider === "workos") {

@@ -31,3 +31,6 @@ infra/azure/arm64-aks/.env.generated
 # Local planning documents (not published)
 /[Tt]ask.md
 /[Tt]asks.md
+
+# Local reference material (never execute or publish)
+/DO-NOT-RUN/

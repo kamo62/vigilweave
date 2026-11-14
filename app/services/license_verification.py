@@ -300,33 +300,53 @@ def _verify_online_key(key: str | None, license_type: LicenseType, org: str) -> 
     cache_data = _load_license_cache()
     cache_key = _license_cache_key(key)
 
-    # Check if we have a valid cached result
+    # An outage grace period never extends the licence's own expiry.
+    cached_result = None
+    age_seconds = None
     if cache_key in cache_data:
         cached = cache_data[cache_key]
-        cached_at = datetime.fromisoformat(cached["cached_at"])
-
-        # Use cache if it's less than configured TTL old
-        cache_ttl = settings.license_cache_ttl_hours * 3600
-        if (datetime.now(UTC) - cached_at).total_seconds() < cache_ttl:
-            logger.debug(f"Using cached license verification for {org}")
-            return VerificationResult(
+        try:
+            cached_at = datetime.fromisoformat(cached["cached_at"])
+            expires_at = (
+                datetime.fromisoformat(cached["expires_at"]) if cached["expires_at"] else None
+            )
+            age_seconds = (datetime.now(UTC) - cached_at).total_seconds()
+            cached_result = VerificationResult(
                 valid=cached["valid"],
                 license_type=LicenseType(cached["license_type"]),
                 tier=cached["tier"],
                 organization=cached["organization"],
-                expires_at=datetime.fromisoformat(cached["expires_at"])
-                if cached["expires_at"]
-                else None,
+                expires_at=expires_at,
                 features=cached["features"],
                 error_message=cached.get("error_message"),
                 verified_online=False,  # Cached result
             )
+            if not cached_result.valid or age_seconds < 0 or not _licence_unexpired(expires_at):
+                cached_result = None
+        except KeyError, TypeError, ValueError:
+            cached_result = None
+        if cached_result is None:
+            cache_data.pop(cache_key, None)
+            _save_license_cache(cache_data)
+        elif age_seconds is not None and age_seconds < settings.license_cache_ttl_hours * 3600:
+            return cached_result
 
     # Attempt online verification
     try:
         result = _call_license_server(key, license_type, org)
 
         # Cache successful results
+        if result.valid and not _licence_unexpired(result.expires_at):
+            result = VerificationResult(
+                valid=False,
+                license_type=LicenseType.COMMUNITY,
+                tier="community",
+                organization=None,
+                expires_at=None,
+                features=[],
+                error_message="License has expired",
+                verified_online=True,
+            )
         if result.valid:
             cache_data[cache_key] = {
                 "valid": result.valid,
@@ -342,33 +362,26 @@ def _verify_online_key(key: str | None, license_type: LicenseType, org: str) -> 
                 "cache_version": _LICENSE_CACHE_VERSION,
             }
             _save_license_cache(cache_data)
+        elif cache_key in cache_data:
+            cache_data.pop(cache_key)
+            _save_license_cache(cache_data)
 
         return result
 
-    except Exception as exc:
-        logger.warning(f"License server verification failed: {exc}")
+    except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+        logger.warning("License server unavailable (%s)", type(exc).__name__)
 
         # Check for stale cache (up to 7 days old during outages)
-        if cache_key in cache_data:
-            cached = cache_data[cache_key]
-            cached_at = datetime.fromisoformat(cached["cached_at"])
-            age_days = (datetime.now(UTC) - cached_at).total_seconds() / 86400
-
-            if age_days <= 7:
-                logger.info(f"Using stale cache ({age_days:.1f} days old) for {org}")
+        if cached_result is not None and age_seconds is not None:
+            if age_seconds <= 7 * 86400:
                 return VerificationResult(
-                    valid=cached["valid"],
-                    license_type=LicenseType(cached["license_type"]),
-                    tier=cached["tier"],
-                    organization=cached["organization"],
-                    expires_at=datetime.fromisoformat(cached["expires_at"])
-                    if cached["expires_at"]
-                    else None,
-                    features=cached["features"],
-                    error_message=(
-                        "Using cached license (server unavailable). "
-                        f"{cached.get('error_message', '')}"
-                    ),
+                    valid=True,
+                    license_type=cached_result.license_type,
+                    tier=cached_result.tier,
+                    organization=cached_result.organization,
+                    expires_at=cached_result.expires_at,
+                    features=cached_result.features,
+                    error_message="Using cached license (server unavailable).",
                     verified_online=False,
                 )
 
@@ -385,6 +398,14 @@ def _verify_online_key(key: str | None, license_type: LicenseType, org: str) -> 
             ),
             verified_online=False,
         )
+
+
+def _licence_unexpired(expires_at: datetime | None) -> bool:
+    if expires_at is None:
+        return True
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    return expires_at > datetime.now(UTC)
 
 
 def _call_license_server(
@@ -424,9 +445,9 @@ def _call_license_server(
         )
 
     except httpx.HTTPStatusError as exc:
-        logger.error(
-            f"License server returned error: {exc.response.status_code} - {exc.response.text}"
-        )
+        if exc.response.status_code >= 500 or exc.response.status_code == 429:
+            raise
+        logger.warning("License server rejected verification: %s", exc.response.status_code)
         return VerificationResult(
             valid=False,
             license_type=LicenseType.COMMUNITY,
@@ -534,6 +555,8 @@ def verify_license(key: str | None = None, tenant_slug: str | None = None) -> Ve
     Returns:
         VerificationResult with validation status and features
     """
+    if settings.license_testing_mode and settings.environment not in {"development", "test"}:
+        raise RuntimeError("LICENSE_TESTING_MODE is only allowed in development/test")
     if key is None:
         key = settings.license_key
 

@@ -4,6 +4,7 @@ export type FindingSeverity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Info'
 
 export interface ScanCreatePayload {
   repo: string
+  project_key?: string
   branch?: string
   commit?: string
   scan_type: 'comprehensive' | 'fast' | 'security-only' | 'custom'
@@ -16,7 +17,7 @@ export interface ScanResponse {
   repo: string
   branch?: string | null
   commit?: string | null
-  status: ScanStatus
+  status: string
   scan_type: string
   quality_gate_passed?: boolean | null
   total_findings: number
@@ -26,6 +27,12 @@ export interface ScanResponse {
   low_findings: number
   info_findings: number
   suppressed_findings: number
+  tool_executions?: Array<{
+    tool: string
+    status: string
+    stdout_summary?: string | null
+    stderr_summary?: string | null
+  }>
 }
 
 export interface FindingStats {

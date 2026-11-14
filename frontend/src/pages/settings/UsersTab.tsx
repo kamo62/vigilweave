@@ -21,8 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { buildApiUrl } from '@/lib/api-url'
-import { getAuthHeaders, getCsrfToken } from '@/lib/auth'
+import { fetchJson } from '@/lib/api'
 import { useAuth } from '@/lib/useAuth'
 
 interface UserRecord {
@@ -51,118 +50,67 @@ interface InvitationRecord {
 }
 
 async function fetchUsers(): Promise<UserRecord[]> {
-  const response = await fetch(buildApiUrl('/api/v1/auth/users'), {
-    headers: getAuthHeaders(),
-    credentials: 'include',
-  })
-  if (!response.ok) throw new Error(`Failed to fetch users (${response.status})`)
-  return (await response.json()) as UserRecord[]
+  return fetchJson<UserRecord[]>(
+    '/api/v1/auth/users',
+    undefined,
+    'Failed to fetch users',
+  )
 }
 
 async function updateUserRole(userId: number, role: string): Promise<UserRecord> {
-  const csrfToken = getCsrfToken()
-  const headers: Record<string, string> = {
-    ...getAuthHeaders(),
-    'Content-Type': 'application/json',
-  }
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken
-  }
-  const response = await fetch(buildApiUrl(`/api/v1/auth/users/${userId}/role`), {
-    method: 'PATCH',
-    headers,
-    credentials: 'include',
-    body: JSON.stringify({ role }),
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error((body as { detail?: string }).detail || `Failed to update role (${response.status})`)
-  }
-  return (await response.json()) as UserRecord
+  return fetchJson<UserRecord>(
+    `/api/v1/auth/users/${userId}/role`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    },
+    'Failed to update role',
+  )
 }
 
 async function deleteUser(userId: number): Promise<void> {
-  const csrfToken = getCsrfToken()
-  const headers: Record<string, string> = { ...getAuthHeaders() }
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken
-  }
-  const response = await fetch(buildApiUrl(`/api/v1/auth/users/${userId}`), {
-    method: 'DELETE',
-    headers,
-    credentials: 'include',
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error((body as { detail?: string }).detail || `Failed to delete user (${response.status})`)
-  }
+  return fetchJson<void>(
+    `/api/v1/auth/users/${userId}`,
+    { method: 'DELETE' },
+    'Failed to delete user',
+  )
 }
 
 async function fetchInvitations(): Promise<InvitationRecord[]> {
-  const response = await fetch(buildApiUrl('/api/v1/auth/invitations'), {
-    headers: getAuthHeaders(),
-    credentials: 'include',
-  })
-  if (!response.ok) throw new Error(`Failed to fetch invitations (${response.status})`)
-  return (await response.json()) as InvitationRecord[]
+  return fetchJson<InvitationRecord[]>(
+    '/api/v1/auth/invitations',
+    undefined,
+    'Failed to fetch invitations',
+  )
 }
 
 async function sendInvitation(email: string): Promise<InvitationRecord> {
-  const csrfToken = getCsrfToken()
-  const headers: Record<string, string> = {
-    ...getAuthHeaders(),
-    'Content-Type': 'application/json',
-  }
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken
-  }
-  const response = await fetch(buildApiUrl('/api/v1/auth/invitations'), {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-    body: JSON.stringify({ email }),
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error((body as { detail?: string }).detail || `Failed to send invitation (${response.status})`)
-  }
-  return (await response.json()) as InvitationRecord
+  return fetchJson<InvitationRecord>(
+    '/api/v1/auth/invitations',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    },
+    'Failed to send invitation',
+  )
 }
 
 async function resendInvitation(invitationId: string): Promise<InvitationRecord> {
-  const csrfToken = getCsrfToken()
-  const headers: Record<string, string> = { ...getAuthHeaders() }
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken
-  }
-  const response = await fetch(buildApiUrl(`/api/v1/auth/invitations/${invitationId}/resend`), {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error((body as { detail?: string }).detail || `Failed to resend invitation (${response.status})`)
-  }
-  return (await response.json()) as InvitationRecord
+  return fetchJson<InvitationRecord>(
+    `/api/v1/auth/invitations/${invitationId}/resend`,
+    { method: 'POST' },
+    'Failed to resend invitation',
+  )
 }
 
 async function revokeInvitation(invitationId: string): Promise<InvitationRecord> {
-  const csrfToken = getCsrfToken()
-  const headers: Record<string, string> = { ...getAuthHeaders() }
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken
-  }
-  const response = await fetch(buildApiUrl(`/api/v1/auth/invitations/${invitationId}/revoke`), {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error((body as { detail?: string }).detail || `Failed to revoke invitation (${response.status})`)
-  }
-  return (await response.json()) as InvitationRecord
+  return fetchJson<InvitationRecord>(
+    `/api/v1/auth/invitations/${invitationId}/revoke`,
+    { method: 'POST' },
+    'Failed to revoke invitation',
+  )
 }
 
 export function UsersTab() {

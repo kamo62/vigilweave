@@ -4,6 +4,42 @@ Implementation updates for VigilWeave. For setup, see [README.md](../README.md).
 
 ---
 
+## 2026-11-14: 3.0.0, reference review improvements
+
+- Contained source excerpts within the checkout, bounded reads to 1 MiB, omitted excerpts
+  for secret findings and affected files, and applied best-effort text redaction.
+- Made assigned project policies authoritative for gate thresholds and prevented failed
+  or unfinished tools from producing a passing gate while retaining partial findings.
+- Required admin authority for API-key creation, validated WorkOS issuer/subject and
+  optional audience claims, and removed authentication claim printing.
+- Bound SCM credentials to tenant and provider destinations, constrained Azure DevOps
+  clones to their configured organisation, validated Bitbucket continuation URLs, and
+  encoded provider path parameters. Corrected Azure DevOps clone Basic authentication.
+  Explicitly linked GitHub App scans fail if App credentials are unconfigured.
+- Restricted licence testing bypass to development/test, removed indefinite process
+  entitlement retention, enforced cached expiry and rejection invalidation, and retained
+  bounded outage grace for transient service failures. Matched billing revoke/reactivate
+  responses to the licence server's flat response schema.
+- Disabled ESLint unless repository-code execution is explicitly enabled. Existing Gradle
+  and .NET opt-in behaviour remains. This is a deliberate reduction in default lint coverage.
+- Refreshed the checked-in OpenAPI contract and centralised the application version.
+- Refreshed terminal scan findings/metrics, displayed failed scan errors and controlled triage
+  selection from query state. Stabilised the reassignment mutation reset dependency.
+- Preserved mutation request bodies for CSRF retry, limited retries to actual CSRF errors,
+  reused shared mutation transport, and cleared CSRF state on logout/session expiry.
+- Generated frontend API types before development/tests, excluded browser specs from unit tests
+  and corrected typecheck to visit referenced projects.
+- Added focused regressions before backend behaviour changes and verified new frontend
+  regressions against original source.
+- Added the detailed SCM provider API reference with authentication/scopes, discovery,
+  pagination, clone paths, GitHub App separation, errors and current compatibility gaps.
+  Corrected in-app request examples, connection-test claims and retired Bitbucket guidance.
+- Integration delivery notes remain pending final verification.
+
+The major version reflects stricter authentication, credential destinations, entitlement
+and gate behaviour. This is still an educational application; these changes do not establish
+production readiness or operating-system scanner isolation.
+
 ## 2026-11-12: Public educational test application
 
 - Removed unused Azure deployment scripts and their environment template, plus the unused findings mockup and screenshot with a production-looking example key.

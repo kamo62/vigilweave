@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlmodel import Session, select
 
+from app import __version__
 from app.core.config import settings
 from app.core.database import get_session
 from app.core.licensing import get_license
@@ -80,6 +81,10 @@ def get_capabilities(
         ]
 
     host_requirements = {
+        "eslint": (
+            "Disabled by default because repository configuration can execute code. "
+            "Set ENABLE_REPO_BUILD_TOOL_ADAPTERS=true only for trusted repositories."
+        ),
         "tflint": "Bundled in the base linux/arm64 image for Terraform linting.",
         "cfn-lint": "Bundled in the base linux/arm64 image for CloudFormation linting.",
     }
@@ -101,7 +106,7 @@ def get_capabilities(
         )
 
     return CapabilityResponse(
-        version="2.0.0",
+        version=__version__,
         authentication={
             "api_keys": settings.resolved_api_keys_enabled(),
             "anonymous_bootstrap": anonymous_bootstrap_enabled(session),

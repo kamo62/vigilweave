@@ -9,11 +9,20 @@ import { normalizeSeverity } from "./utils";
 let sessionRedirectPending = false;
 let csrfFetchInFlight: Promise<string> | null = null;
 
+export function clearCsrfTokenCache(): void {
+  setCsrfToken("");
+  csrfFetchInFlight = null;
+}
+
 function handleSessionExpiry(response: Response): void {
-  if (response.status !== 401 || typeof window === "undefined") {
+  if (response.status !== 401) {
     return;
   }
   if (getRuntimeAuthConfig().apiKey) {
+    return;
+  }
+  clearCsrfTokenCache();
+  if (typeof window === "undefined") {
     return;
   }
   if (
@@ -49,12 +58,15 @@ const client = createClient<paths>({
       headers,
       credentials: "include",
     });
+    const retryableRequest = shouldAttachCsrf(method)
+      ? authenticatedRequest.clone()
+      : null;
     let response = await fetch(authenticatedRequest);
-    if (response.status === 403 && shouldAttachCsrf(method)) {
+    if (retryableRequest && (await isCsrfErrorResponse(response))) {
       const csrf = await fetchCsrfToken();
       headers.set("X-CSRF-Token", csrf);
       response = await fetch(
-        new Request(request, {
+        new Request(retryableRequest, {
           headers,
           credentials: "include",
         }),
@@ -291,6 +303,20 @@ function extractApiErrorMessage(error: unknown): string | null {
   return null;
 }
 
+async function isCsrfErrorResponse(response: Response): Promise<boolean> {
+  if (response.status !== 403) {
+    return false;
+  }
+
+  try {
+    const payload = (await response.clone().json()) as unknown;
+    const message = extractApiErrorMessage(payload)?.toLowerCase();
+    return message === "csrf token required" || message === "invalid csrf token";
+  } catch {
+    return false;
+  }
+}
+
 function toApiError(error: unknown, fallback: string): Error {
   return new Error(extractApiErrorMessage(error) ?? fallback);
 }
@@ -363,7 +389,11 @@ async function fetchCsrfToken(): Promise<string> {
   }
 }
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
+export async function fetchJson<T>(
+  input: string,
+  init?: RequestInit,
+  errorMessage = "Request failed",
+): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   const controller = new AbortController();
   const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 30_000);
@@ -385,7 +415,7 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
       credentials: "include",
     });
     handleSessionExpiry(response);
-    if (response.status === 403 && shouldAttachCsrf(method)) {
+    if (shouldAttachCsrf(method) && (await isCsrfErrorResponse(response))) {
       const csrf = await fetchCsrfToken();
       headers.set("X-CSRF-Token", csrf);
       const retry = await fetch(buildApiUrl(input), {
@@ -396,12 +426,18 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
       });
       handleSessionExpiry(retry);
       if (!retry.ok) {
-        throw await buildResponseError(retry, "Request failed");
+        throw await buildResponseError(retry, errorMessage);
+      }
+      if (retry.status === 204) {
+        return undefined as T;
       }
       return (await retry.json()) as T;
     }
     if (!response.ok) {
-      throw await buildResponseError(response, "Request failed");
+      throw await buildResponseError(response, errorMessage);
+    }
+    if (response.status === 204) {
+      return undefined as T;
     }
     return (await response.json()) as T;
   } finally {
@@ -871,24 +907,11 @@ export async function updateSaaSTenantLicense(
 }
 
 export async function deleteSaaSTenantLicense(tenantSlug: string): Promise<void> {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value);
-  }
-  const csrf = getCsrfToken() || (await fetchCsrfToken());
-  headers.set("X-CSRF-Token", csrf);
-  const response = await fetch(
-    buildApiUrl(`/api/v1/saas-admin/tenant-licenses/${encodeURIComponent(tenantSlug)}`),
-    {
-      method: "DELETE",
-      headers,
-      credentials: "include",
-    },
+  return fetchJson<void>(
+    `/api/v1/saas-admin/tenant-licenses/${encodeURIComponent(tenantSlug)}`,
+    { method: "DELETE" },
+    "Delete tenant license failed",
   );
-  handleSessionExpiry(response);
-  if (!response.ok) {
-    throw await buildResponseError(response, "Delete tenant license failed");
-  }
 }
 
 export async function fetchPlatformUsers(): Promise<PlatformUserRecord[]> {
@@ -944,23 +967,7 @@ export async function deleteProject(
   const targetPath = projectKey.trim()
     ? `/api/v1/projects/${encodeURIComponent(projectKey)}${qs}`
     : `/api/v1/projects/by-id/${options?.projectId ?? ""}${qs}`;
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value);
-  }
-  const csrf = getCsrfToken() || (await fetchCsrfToken());
-  headers.set("X-CSRF-Token", csrf);
-  const response = await fetch(
-    buildApiUrl(targetPath),
-    {
-      method: "DELETE",
-      headers,
-      credentials: "include",
-    },
-  );
-  handleSessionExpiry(response);
-  if (!response.ok)
-    throw new Error(`Delete project failed (${response.status})`);
+  return fetchJson<void>(targetPath, { method: "DELETE" }, "Delete project failed");
 }
 
 export async function addProjectRepos(
@@ -1115,18 +1122,7 @@ export type ReviewStatus =
   | "wont_fix";
 
 export async function deleteScan(scanId: number): Promise<void> {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value);
-  }
-  const csrf = getCsrfToken() || (await fetchCsrfToken());
-  headers.set("X-CSRF-Token", csrf);
-  const response = await fetch(buildApiUrl(`/api/v1/scans/${scanId}`), {
-    method: "DELETE",
-    headers,
-    credentials: "include",
-  });
-  if (!response.ok) throw await buildResponseError(response, "Delete scan failed");
+  return fetchJson<void>(`/api/v1/scans/${scanId}`, { method: "DELETE" }, "Delete scan failed");
 }
 
 export interface FindingTriageRequest {
@@ -1139,25 +1135,15 @@ export async function triageFinding(
   findingId: number,
   payload: FindingTriageRequest,
 ): Promise<Finding> {
-  const headers = new Headers({
-    "Content-Type": "application/json",
-  });
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value);
-  }
-  const csrf = getCsrfToken() || (await fetchCsrfToken());
-  headers.set("X-CSRF-Token", csrf);
-  const response = await fetch(
-    buildApiUrl(`/api/v1/scans/${scanId}/findings/${findingId}/triage`),
+  return fetchJson<Finding>(
+    `/api/v1/scans/${scanId}/findings/${findingId}/triage`,
     {
       method: "PATCH",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      credentials: "include",
     },
+    "Triage failed",
   );
-  if (!response.ok) throw new Error(`Triage failed (${response.status})`);
-  return (await response.json()) as Finding;
 }
 
 export interface BulkTriageRequest {
@@ -1175,25 +1161,15 @@ export async function bulkTriageFindings(
   scanId: number,
   payload: BulkTriageRequest,
 ): Promise<BulkTriageResponse> {
-  const headers = new Headers({
-    "Content-Type": "application/json",
-  });
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value);
-  }
-  const csrf = getCsrfToken() || (await fetchCsrfToken());
-  headers.set("X-CSRF-Token", csrf);
-  const response = await fetch(
-    buildApiUrl(`/api/v1/scans/${scanId}/findings/bulk-triage`),
+  return fetchJson<BulkTriageResponse>(
+    `/api/v1/scans/${scanId}/findings/bulk-triage`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      credentials: "include",
     },
+    "Bulk triage failed",
   );
-  if (!response.ok) throw new Error(`Bulk triage failed (${response.status})`);
-  return (await response.json()) as BulkTriageResponse;
 }
 
 export async function downloadScanReportPdf(
@@ -1304,19 +1280,11 @@ export async function updateSCMConnection(
 }
 
 export async function deleteSCMConnection(id: number): Promise<void> {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value);
-  }
-  const csrf = getCsrfToken() || (await fetchCsrfToken());
-  headers.set("X-CSRF-Token", csrf);
-  const response = await fetch(buildApiUrl(`/api/v1/scm-connections/${id}`), {
-    method: "DELETE",
-    headers,
-    credentials: "include",
-  });
-  handleSessionExpiry(response);
-  if (!response.ok) throw await buildResponseError(response, "Delete connection failed");
+  return fetchJson<void>(
+    `/api/v1/scm-connections/${id}`,
+    { method: "DELETE" },
+    "Delete connection failed",
+  );
 }
 
 export async function testSCMConnection(

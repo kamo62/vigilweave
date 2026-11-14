@@ -87,6 +87,29 @@ or network access is required.
 5. Add SCM connections under **Settings → Connections** (GitHub, GitLab, Bitbucket, Azure DevOps)
 6. Create a project and import repositories from your connected SCM accounts
 
+See the [SCM provider API reference](docs/scm-providers-api.md) for authentication,
+permissions, discovery endpoints, pagination, clone credentials and troubleshooting.
+
+### Upgrading to 3.0
+
+- API-key creation requires admin authority, including the first key created by an
+  authenticated user. The existing anonymous development bootstrap still applies.
+- WorkOS tokens must have a supported issuer and a subject. An audience, when supplied,
+  must include the configured client ID.
+- Linked SCM clones must stay on the configured provider origin. Azure DevOps clones
+  must also stay in the configured organisation. Invalid or inactive credential links fail
+  the scan instead of falling back silently.
+- Failed or unfinished scanner executions prevent a passing gate. An assigned project
+  policy supplies the thresholds; deployment defaults apply when no policy is selected.
+- Source excerpts omit secret findings and files with detected secrets, reject paths
+  outside the checkout, and skip files larger than 1 MiB. Other excerpts receive best-effort
+  redaction; this does not guarantee that all secrets are removed.
+- ESLint now shares the repository-code execution opt-in with Gradle and .NET adapters:
+  `ENABLE_REPO_BUILD_TOOL_ADAPTERS=true`. Enable it only for trusted repositories.
+  This reduces default JS/TS lint coverage. These controls do not provide a scanner sandbox.
+- `LICENSE_TESTING_MODE=true` is restricted to development/test. Cached licences cannot
+  grant access past expiry; explicit rejection clears the previous positive cache entry.
+
 ## Worker
 
 ```bash
@@ -145,6 +168,8 @@ Core endpoints:
 - `GET /api/v1/system/capabilities` : License and feature flags
 
 Full API reference: `docs/openapi.json`
+
+Provider integration details: [SCM providers](docs/scm-providers-api.md).
 
 ## Scanner Matrix
 

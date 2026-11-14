@@ -28,6 +28,7 @@ _BLOCKED_HOSTNAMES = {
     "169.254.170.2",
     "100.100.100.200",
     "metadata.google.internal",
+    "fd00:ec2::254",
 }
 
 _TOKEN_PATTERN = re.compile(r"(?i)\b(bearer|basic)\s+[a-z0-9._~+\-/]+=*")
@@ -84,6 +85,7 @@ def ensure_safe_outbound_url(
     *,
     allowed_hosts: list[str] | None = None,
     allow_http: bool = False,
+    allow_private: bool = False,
 ) -> None:
     """Validate outbound URLs to reduce SSRF risk."""
 
@@ -112,7 +114,7 @@ def ensure_safe_outbound_url(
         ip = None
 
     if ip is not None and (
-        ip.is_private
+        (ip.is_private and not allow_private)
         or ip.is_loopback
         or ip.is_link_local
         or ip.is_reserved

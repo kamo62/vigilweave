@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
@@ -351,7 +351,7 @@ function FindingCard({
           </div>
         </button>
         <Select
-          defaultValue={finding.review_status ?? 'open'}
+          value={finding.review_status ?? 'open'}
           onValueChange={(value) => onTriage(finding.id, value as ReviewStatus)}
         >
           <SelectTrigger className="h-7 w-[120px] shrink-0 text-xs">
@@ -456,6 +456,24 @@ export function ScanDetailPage() {
   })
 
   const queryClient = useQueryClient()
+  const previousScanStatus = useRef<{ scanId: number; status?: string }>({ scanId })
+
+  useEffect(() => {
+    const status = scanQuery.data?.status
+    const previous = previousScanStatus.current
+    if (
+      previous.scanId === scanId &&
+      previous.status &&
+      previous.status !== 'completed' &&
+      previous.status !== 'failed' &&
+      status === 'completed'
+    ) {
+      void queryClient.invalidateQueries({ queryKey: ['findings', scanId] })
+      void queryClient.invalidateQueries({ queryKey: ['quality-metrics', scanId] })
+    }
+    previousScanStatus.current = { scanId, status }
+  }, [queryClient, scanId, scanQuery.data?.status])
+
   const triageMutation = useMutation({
     mutationFn: ({ findingId, status }: { findingId: number; status: ReviewStatus }) =>
       triageFinding(scanId, findingId, { review_status: status }),
@@ -674,6 +692,11 @@ export function ScanDetailPage() {
         {qualityQuery.isError ? (
           <div className="rounded-sm border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
             Quality metrics are unavailable for this scan right now.
+          </div>
+        ) : null}
+        {scan.status === 'failed' && typeof scan.scan_metadata?.error === 'string' ? (
+          <div className="rounded-sm border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">
+            {scan.scan_metadata.error}
           </div>
         ) : null}
         {/* Header */}

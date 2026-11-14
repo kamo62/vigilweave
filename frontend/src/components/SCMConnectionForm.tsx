@@ -131,9 +131,13 @@ export function SCMConnectionForm({
       </div>
       {provider === 'bitbucket' ? (
         <div className="space-y-2">
-          <Label>Username</Label>
-          <Input placeholder="Bitbucket username" value={username} onChange={(event) => setUsername(event.target.value)} />
-          <p className="text-[11px] text-muted-foreground">Required for Bitbucket app passwords and API tokens.</p>
+          <Label>REST / Git identity</Label>
+          <Input placeholder="Atlassian account email for REST Basic auth" value={username} onChange={(event) => setUsername(event.target.value)} />
+          <p className="text-[11px] text-muted-foreground">
+            API-token REST authentication requires your Atlassian email. This client
+            also uses that value for Git, which still needs compatibility work.
+            App passwords are retired; a successful Test does not prove cloning works.
+          </p>
         </div>
       ) : null}
       {provider === 'azure_devops' ? (

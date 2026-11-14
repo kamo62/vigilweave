@@ -3,6 +3,7 @@ import * as vscode from 'vscode'
 import { analyzeSnapshot } from './client'
 import { toDiagnostics } from './diagnostics'
 import { collectChangedFiles, collectCurrentFile, collectWorkspaceFiles } from './files'
+import { assertTrustedWorkspace, readBoundApiKey, serviceOrigin } from './security'
 
 const SECRET_KEY = 'vigilweave.apiKey'
 
@@ -22,13 +23,21 @@ export function activate(context: vscode.ExtensionContext): void {
         placeHolder: 'vw_...',
       })
       if (!apiKey) return
-      await context.secrets.store(SECRET_KEY, apiKey)
+      try {
+        const origin = serviceOrigin(getConfig().serverUrl)
+        await context.secrets.store(SECRET_KEY, JSON.stringify({ apiKey, origin }))
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        vscode.window.showErrorMessage(message)
+        return
+      }
       vscode.window.showInformationMessage('VigilWeave API key stored securely.')
     }),
   )
 
   context.subscriptions.push(
     vscode.commands.registerCommand('vigilweave.scanWorkspace', async () => {
+      if (!requireTrustedWorkspace()) return
       const folder = getWorkspaceFolder()
       if (!folder) return
       const files = await collectWorkspaceFiles(folder)
@@ -45,6 +54,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('vigilweave.scanCurrentFile', async () => {
+      if (!requireTrustedWorkspace()) return
       const editor = vscode.window.activeTextEditor
       if (!editor) {
         vscode.window.showWarningMessage('Open a file before running VigilWeave.')
@@ -62,6 +72,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('vigilweave.scanChangedFiles', async () => {
+      if (!requireTrustedWorkspace()) return
       const folder = getWorkspaceFolder()
       if (!folder) return
       const files = await collectChangedFiles(folder)
@@ -87,18 +98,28 @@ async function runScan(options: {
   persistScan: boolean
   repo?: string
 }): Promise<void> {
+  if (!requireTrustedWorkspace()) return
   if (!options.files.length) {
     vscode.window.showInformationMessage('No supported files found for VigilWeave analysis.')
     return
   }
 
-  const apiKey = await options.context.secrets.get(SECRET_KEY)
-  if (!apiKey) {
+  const storedApiKey = await options.context.secrets.get(SECRET_KEY)
+  if (!storedApiKey) {
     vscode.window.showWarningMessage('Set a VigilWeave API key before scanning.')
     return
   }
 
   const config = getConfig()
+  let apiKey: string
+  try {
+    if (config.dashboardUrl) serviceOrigin(config.dashboardUrl)
+    apiKey = readBoundApiKey(storedApiKey, config.serverUrl)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    vscode.window.showWarningMessage(message)
+    return
+  }
   options.statusBar.text = 'VigilWeave scanning...'
 
   try {
@@ -142,10 +163,30 @@ function getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
 function getConfig() {
   const config = vscode.workspace.getConfiguration('vigilweave')
   return {
-    serverUrl: config.get<string>('serverUrl', 'http://localhost:8000'),
+    serverUrl: getMachineSetting(config, 'serverUrl', 'http://localhost:8000'),
     tenant: config.get<string>('tenant', 'default'),
-    dashboardUrl: config.get<string>('dashboardUrl', ''),
+    dashboardUrl: getMachineSetting(config, 'dashboardUrl', 'http://localhost:5173'),
     persistWorkspaceScans: config.get<boolean>('persistWorkspaceScans', true),
     includeQualityMetrics: config.get<boolean>('includeQualityMetrics', true),
+  }
+}
+
+function getMachineSetting<T>(
+  config: vscode.WorkspaceConfiguration,
+  key: string,
+  fallback: T,
+): T {
+  const inspected = config.inspect<T>(key)
+  return inspected?.globalValue ?? inspected?.defaultValue ?? fallback
+}
+
+function requireTrustedWorkspace(): boolean {
+  try {
+    assertTrustedWorkspace(vscode.workspace.isTrusted)
+    return true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    vscode.window.showWarningMessage(message)
+    return false
   }
 }

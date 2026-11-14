@@ -1,5 +1,7 @@
 .git
 .gitignore
+DO-NOT-RUN
+Tasks.md
 .venv
 __pycache__
 .pytest_cache

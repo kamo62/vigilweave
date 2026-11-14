@@ -1,7 +1,7 @@
 {
   "name": "vscode-extension",
   "displayName": "VigilWeave",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "license": "MIT",
   "private": true,
   "publisher": "vigilweave",
@@ -39,6 +39,7 @@
       "properties": {
         "vigilweave.serverUrl": {
           "type": "string",
+          "scope": "machine",
           "default": "http://localhost:8000",
           "description": "Base URL for the VigilWeave API."
         },
@@ -49,6 +50,7 @@
         },
         "vigilweave.dashboardUrl": {
           "type": "string",
+          "scope": "machine",
           "default": "http://localhost:5173",
           "description": "Optional dashboard URL used for deep links."
         },

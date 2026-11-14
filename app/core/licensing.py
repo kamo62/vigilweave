@@ -98,7 +98,9 @@ class LicenseInfo:
         return feature in self.features
 
 
-@lru_cache
+# The verifier owns the bounded persistent cache. Retain cache_clear() compatibility
+# for existing callers without retaining entitlements indefinitely in this process.
+@lru_cache(maxsize=0)
 def get_license(tenant_slug: str | None = None) -> LicenseInfo:
     """Derive the active license from the configured key.
 
@@ -180,11 +182,5 @@ def require_feature(feature: Feature):
 
 
 def clear_license_cache() -> None:
-    """Clear the license cache to force re-verification.
-
-    Useful for:
-    - Testing license changes
-    - Manual cache invalidation
-    - Resolving verification issues
-    """
+    """Reset the legacy process-cache hook; verifier TTL/expiry rules still apply."""
     get_license.cache_clear()

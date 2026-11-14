@@ -244,6 +244,7 @@ export function IntegrationsPage() {
       await queryClient.invalidateQueries({ queryKey: ['github-app-installation-repositories'] })
     },
   })
+  const resetReassignMutation = reassignMutation.reset
   const azureAuthScheme =
     useWatch({
       control: azureForm.control,
@@ -317,9 +318,9 @@ export function IntegrationsPage() {
   ])
 
   useEffect(() => {
-    reassignMutation.reset()
+    resetReassignMutation()
   }, [
-    reassignMutation,
+    resetReassignMutation,
     reassignTargetType,
     selectedInstallationId,
     selectedTargetInstallationId,
@@ -368,7 +369,7 @@ export function IntegrationsPage() {
         ? { target_scm_connection_id: Number(selectedTargetScmConnectionId) }
         : { target_github_installation_id: Number(selectedTargetInstallationId) }
 
-    reassignMutation.reset()
+    resetReassignMutation()
     reassignMutation.mutate({
       installationId: selectedInstallation.installation_id,
       payload,

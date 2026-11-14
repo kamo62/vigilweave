@@ -5,15 +5,15 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bun run gen:api && vite",
     "gen:api": "bunx openapi-typescript ../docs/openapi.json -o src/types/api.generated.ts",
     "build": "bun run gen:api && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "bun run gen:api && vitest run",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "typecheck": "bun run gen:api && tsc --noEmit"
+    "typecheck": "bun run gen:api && tsc -b"
   },
   "dependencies": {
     "@heroui/react": "^3.0.1",

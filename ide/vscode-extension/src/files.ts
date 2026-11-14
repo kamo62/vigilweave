@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import * as vscode from 'vscode'
 
 import type { IdeFile } from './types'
+import { assertTrustedWorkspace } from './security'
 
 const execFileAsync = promisify(execFile)
 
@@ -20,6 +21,7 @@ export async function collectWorkspaceFiles(folder: vscode.WorkspaceFolder): Pro
 }
 
 export async function collectChangedFiles(folder: vscode.WorkspaceFolder): Promise<IdeFile[]> {
+  assertTrustedWorkspace(vscode.workspace.isTrusted)
   const { stdout } = await execFileAsync('git', ['diff', '--name-only', 'HEAD'], {
     cwd: folder.uri.fsPath,
   })

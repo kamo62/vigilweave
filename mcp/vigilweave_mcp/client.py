@@ -15,16 +15,26 @@ class VigilWeaveClient:
         self,
         base_url: str | None = None,
         api_key: str | None = None,
+        tenant: str | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        self.base_url = (base_url or os.environ.get("VIGILWEAVE_URL", "http://localhost:8000")).rstrip("/")
-        self.api_key = api_key or os.environ.get("VIGILWEAVE_API_KEY", "")
+        self.base_url = (
+            base_url
+            if base_url is not None
+            else os.environ.get("VIGILWEAVE_URL", "http://localhost:8000")
+        ).rstrip("/")
+        self.api_key = api_key if api_key is not None else os.environ.get("VIGILWEAVE_API_KEY", "")
+        tenant_slug = tenant if tenant is not None else os.environ.get("VIGILWEAVE_TENANT", "")
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        if tenant_slug:
+            headers["X-VigilWeave-Tenant"] = tenant_slug
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             timeout=30.0,
+            transport=transport,
         )
 
     async def close(self) -> None:
@@ -68,10 +78,22 @@ class VigilWeaveClient:
     async def get_scan(self, scan_id: int) -> dict[str, Any]:
         return await self._get(f"/api/v1/scans/{scan_id}")
 
-    async def create_scan(self, repo: str, scan_type: str = "comprehensive", branch: str | None = None) -> dict[str, Any]:
-        body: dict[str, Any] = {"repo": repo, "scan_type": scan_type, "include_quality_metrics": True}
+    async def create_scan(
+        self,
+        repo: str,
+        scan_type: str = "comprehensive",
+        branch: str | None = None,
+        project_key: str | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "repo": repo,
+            "scan_type": scan_type,
+            "include_quality_metrics": True,
+        }
         if branch:
             body["branch"] = branch
+        if project_key:
+            body["project_key"] = project_key
         return await self._post("/api/v1/scans/", body)
 
     # -- Findings ----------------------------------------------------------------
@@ -85,7 +107,13 @@ class VigilWeaveClient:
     async def get_finding_stats(self, scan_id: int) -> dict[str, Any]:
         return await self._get(f"/api/v1/scans/{scan_id}/findings/stats")
 
-    async def triage_finding(self, scan_id: int, finding_id: int, review_status: str, comment: str | None = None) -> dict[str, Any]:
+    async def triage_finding(
+        self,
+        scan_id: int,
+        finding_id: int,
+        review_status: str,
+        comment: str | None = None,
+    ) -> dict[str, Any]:
         body: dict[str, Any] = {"review_status": review_status}
         if comment:
             body["comment"] = comment

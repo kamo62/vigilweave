@@ -35,7 +35,8 @@ def get_runtime_tool_capabilities(repo_path: Path | None = None) -> dict[str, bo
         "semgrep": shutil.which("semgrep") is not None,
         "bandit": shutil.which("bandit") is not None,
         "ruff": shutil.which("ruff") is not None,
-        "eslint": _eslint_command(repo_path) is not None,
+        "eslint": settings.enable_repo_build_tool_adapters
+        and _eslint_command(repo_path) is not None,
         "checkov": shutil.which("checkov") is not None,
         "tflint": shutil.which("tflint") is not None,
         "cfn-lint": shutil.which("cfn-lint") is not None,
@@ -233,6 +234,8 @@ def _run_ruff(scan_id: int, repo_path: Path) -> ToolRunResult:
 
 
 def _run_eslint(scan_id: int, repo_path: Path) -> ToolRunResult:
+    if not settings.enable_repo_build_tool_adapters:
+        return _skipped("eslint", "Repository code execution requires explicit opt-in")
     command = _eslint_command(repo_path)
     if command is None:
         return _skipped("eslint", "eslint is unavailable or the repository has no JS/TS files")

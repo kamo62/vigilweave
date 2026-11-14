@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app import __version__
 from app.api.auth import router as auth_router
 from app.api.auth_workos import router as auth_workos_router
 from app.api.billing import router as billing_router
@@ -34,6 +35,8 @@ def _validate_production_secrets() -> None:
     """Fail fast if critical secrets are missing outside dev/test."""
     if settings.environment in {"development", "test"}:
         return
+    if settings.license_testing_mode:
+        raise RuntimeError("LICENSE_TESTING_MODE is only allowed in development/test")
     if not session_secret_configured():
         raise RuntimeError(
             "SESSION_SECRET or legacy WORKOS_SESSION_SECRET must be set in "
@@ -59,7 +62,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="VigilWeave", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="VigilWeave", version=__version__, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

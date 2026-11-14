@@ -16,6 +16,8 @@ from app.models import (
     FileMetrics,
     Finding,
     FindingSeverity,
+    PolicyProfile,
+    Project,
     Scan,
     ScanStatus,
     ToolExecution,
@@ -52,7 +54,9 @@ def execute_scan(session: Session, scan_id: int) -> None:
 
     repo_path: Path | None = None
     try:
-        clone_url = resolve_clone_url(session, scan.repo, scan.scan_metadata)
+        clone_url = resolve_clone_url(
+            session, scan.repo, scan.scan_metadata, tenant_slug=scan.tenant_slug
+        )
         repo_path = clone_repository(clone_url, scan.branch, scan.commit)
         findings, executions, file_metrics, language_counts = analyze_directory(
             scan.id,
@@ -65,8 +69,13 @@ def execute_scan(session: Session, scan_id: int) -> None:
         )
         for execution in executions:
             session.add(execution)
+        secret_files = {
+            str((repo_path / finding.file_path).resolve())
+            for finding in findings
+            if finding.category == "secret" and finding.file_path
+        }
         for finding in findings:
-            _attach_code_context(finding, repo_path)
+            _attach_code_context(finding, repo_path, excluded_files=secret_files)
             session.add(finding)
         for metric in file_metrics:
             session.add(metric)
@@ -342,10 +351,31 @@ def finalize_scan(
         and scan.high_findings <= settings.max_high_findings
         and (scan.quality_score is None or scan.quality_score >= settings.min_quality_score)
     )
-    policy = evaluate_scan_policy(
-        scan, matching_policy(session, scan.tenant_slug, scan.repo, scan.branch)
+    profile = None
+    if scan.project_id is not None:
+        project = session.get(Project, scan.project_id)
+        if project and project.tenant_slug == scan.tenant_slug and project.quality_gate_policy_id:
+            profile = session.get(PolicyProfile, project.quality_gate_policy_id)
+            if profile is None or profile.tenant_slug != scan.tenant_slug:
+                raise ValueError("Assigned quality gate policy is unavailable for this tenant")
+    if profile is None:
+        profile = matching_policy(session, scan.tenant_slug, scan.repo, scan.branch)
+    policy = evaluate_scan_policy(scan, profile)
+    incomplete_tools = sorted(
+        {
+            execution.tool
+            for execution in session.exec(
+                select(ToolExecution).where(ToolExecution.scan_id == scan_id)
+            ).all()
+            if execution.status
+            in {
+                ToolExecutionStatus.FAILED,
+                ToolExecutionStatus.PENDING,
+                ToolExecutionStatus.RUNNING,
+            }
+        }
     )
-    scan.quality_gate_passed = default_pass and policy.passed
+    scan.quality_gate_passed = (policy.passed if profile else default_pass) and not incomplete_tools
     scan.status = ScanStatus.COMPLETED
     scan.completed_at = datetime.now(UTC)
     scan.scan_metadata = {
@@ -353,6 +383,7 @@ def finalize_scan(
         "languages": language_counts,
         "tools_selected": tools,
         "policy": policy.model_dump(),
+        "incomplete_tools": incomplete_tools,
     }
     github_update = complete_github_check_run(scan)
     if github_update:
@@ -364,24 +395,40 @@ def finalize_scan(
 _CODE_CONTEXT_LINES = 7  # lines before and after the issue line
 
 
-def _attach_code_context(finding: Finding, repo_path: Path) -> None:
+def _attach_code_context(
+    finding: Finding, repo_path: Path, *, excluded_files: set[str] | None = None
+) -> None:
     """Read source lines around the finding and store in tool_metadata."""
 
-    if not finding.file_path or not finding.line:
+    if not finding.file_path or not finding.line or finding.line < 1:
+        return
+    if finding.category == "secret":
         return
     file_on_disk = Path(finding.file_path)
     if not file_on_disk.is_absolute():
         file_on_disk = repo_path / file_on_disk
-    if not file_on_disk.is_file():
-        return
     try:
-        lines = file_on_disk.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
+        file_on_disk = file_on_disk.resolve()
+        if not file_on_disk.is_relative_to(repo_path.resolve()):
+            return
+        if excluded_files and str(file_on_disk) in excluded_files:
+            return
+        if not file_on_disk.is_file():
+            return
+        # Bound the read even if a file grows after stat().
+        with file_on_disk.open("rb") as source:
+            content = source.read(1_048_577)
+        if len(content) > 1_048_576:
+            return
+        lines = content.decode("utf-8", errors="replace").splitlines()
+    except OSError, RuntimeError:
         return
     target = finding.line  # 1-based
     start = max(1, target - _CODE_CONTEXT_LINES)
     end = min(len(lines), target + _CODE_CONTEXT_LINES)
-    snippet = [{"line": i, "text": lines[i - 1]} for i in range(start, end + 1)]
+    snippet = [
+        {"line": i, "text": redact_sensitive_text(lines[i - 1])} for i in range(start, end + 1)
+    ]
     meta = finding.tool_metadata or {}
     meta["code_context"] = {
         "start_line": start,

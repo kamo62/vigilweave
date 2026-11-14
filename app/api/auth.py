@@ -206,8 +206,7 @@ def create_api_key(
 
     enforce_csrf_if_session(request)
 
-    existing = session.exec(select(ApiKeyRecord).limit(1)).first()
-    if existing and not principal.can("admin"):
+    if not principal.can("admin"):
         raise HTTPException(status_code=403, detail="Admin scope required")
 
     prefix, secret = generate_api_key()

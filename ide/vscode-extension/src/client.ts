@@ -1,4 +1,5 @@
 import type { IdeFile, IdeScanResponse } from './types'
+import { apiUrl } from './security'
 
 export async function analyzeSnapshot(options: {
   serverUrl: string
@@ -10,7 +11,7 @@ export async function analyzeSnapshot(options: {
   repo?: string
   files: IdeFile[]
 }): Promise<IdeScanResponse> {
-  const response = await fetch(new URL('/api/v1/ide/analyze', options.serverUrl), {
+  const response = await fetch(apiUrl(options.serverUrl, 'api/v1/ide/analyze'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

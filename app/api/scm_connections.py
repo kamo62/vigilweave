@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select
@@ -89,24 +90,28 @@ def _validate_scm_base_url(provider: SCMProvider, base_url: str) -> str:
 
     normalized = base_url.strip().rstrip("/")
     try:
+        parsed = urlsplit(normalized)
+        if (
+            parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or "\\" in normalized
+            or any(ord(char) < 32 for char in normalized)
+        ):
+            raise ValueError("Base URL must not contain credentials, a query or a fragment")
+        _ = parsed.port  # Validate port syntax before storing the base URL.
+        private_opt_in = settings.allow_private_scm_base_urls and is_private_hostname(
+            parsed.hostname or ""
+        )
         ensure_safe_outbound_url(
             normalized,
-            allowed_hosts=_PROVIDER_ALLOWED_HOSTS.get(provider),
+            allowed_hosts=None if private_opt_in else _PROVIDER_ALLOWED_HOSTS.get(provider),
             allow_http=False,
+            allow_private=private_opt_in,
         )
     except ValueError as exc:
-        if not settings.allow_private_scm_base_urls:
-            raise HTTPException(status_code=422, detail=f"Invalid SCM base URL: {exc}") from exc
-        from urllib.parse import urlsplit
-
-        parsed = urlsplit(normalized)
-        host = (parsed.hostname or "").strip().lower().rstrip(".")
-        if parsed.scheme != "https":
-            raise HTTPException(
-                status_code=422, detail="Invalid SCM base URL: HTTPS is required"
-            ) from None
-        if not host or not is_private_hostname(host):
-            raise HTTPException(status_code=422, detail=f"Invalid SCM base URL: {exc}") from exc
+        raise HTTPException(status_code=422, detail=f"Invalid SCM base URL: {exc}") from exc
     return normalized
 
 

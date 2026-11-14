@@ -5,13 +5,18 @@ import * as task from 'azure-pipelines-task-lib/task'
 import { VigilWeaveClient } from './client'
 import { evaluateGates } from './gates'
 import { buildPrComment, upsertPullRequestComment } from './pr'
+import { pollingDecision } from './scanStatus'
+import { sanitizeRepositoryUrl } from './repository'
 import { normalizeStats } from './severity'
 
 async function main(): Promise<void> {
   try {
     const vigilweaveUrl = requiredInput('vigilweaveUrl')
     const apiKey = requiredInput('apiKey')
-    const repo = task.getInput('repo', false) || process.env.BUILD_REPOSITORY_URI || ''
+    const repo = sanitizeRepositoryUrl(
+      task.getInput('repo', false) || process.env.BUILD_REPOSITORY_URI || '',
+    )
+    const projectKey = task.getInput('projectKey', false) || undefined
     const branch = task.getInput('branch', false) || process.env.BUILD_SOURCEBRANCHNAME || undefined
     const commit = task.getInput('commit', false) || process.env.BUILD_SOURCEVERSION || undefined
     const scanType = (task.getInput('scanType', true) ||
@@ -39,6 +44,7 @@ async function main(): Promise<void> {
     const client = new VigilWeaveClient(vigilweaveUrl, apiKey)
     const created = await client.createScan({
       repo,
+      project_key: projectKey,
       branch,
       commit,
       scan_type: scanType,
@@ -53,19 +59,27 @@ async function main(): Promise<void> {
     await writeJson(summaryOutputPath, { scan, stats })
     await writeJson(sarifOutputPath, sarif)
     task.setVariable('VigilWeave.SarifPath', sarifOutputPath)
-    task.setResult(
-      task.TaskResult.Succeeded,
-      `VigilWeave scan ${scan.id} completed. SARIF staged for AdvancedSecurity-Publish@1.`,
-    )
-
     if (publishPrComment) {
-      await tryPublishPullRequestComment(vigilweaveUrl, scan, stats)
+      try {
+        await tryPublishPullRequestComment(vigilweaveUrl, scan, stats)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        task.warning(`Failed to update the VigilWeave pull request comment: ${message}`)
+      }
     }
 
-    const gates = evaluateGates(stats, { failOnCritical, failOnHigh })
-    if (!gates.passed) {
-      task.setResult(task.TaskResult.Failed, gates.reasons.join('; '))
-    }
+    const gates = evaluateGates(stats, {
+      failOnCritical,
+      failOnHigh,
+      qualityGatePassed: scan.quality_gate_passed,
+      scanStatus: scan.status,
+    })
+    task.setResult(
+      gates.passed ? task.TaskResult.Succeeded : task.TaskResult.Failed,
+      gates.passed
+        ? `VigilWeave scan ${scan.id} completed. SARIF staged for AdvancedSecurity-Publish@1.`
+        : gates.reasons.join('; '),
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     task.setResult(task.TaskResult.Failed, message)
@@ -81,8 +95,12 @@ async function pollForCompletion(
   const deadline = Date.now() + timeoutSeconds * 1000
   while (Date.now() < deadline) {
     const scan = await client.getScan(scanId)
-    if (scan.status === 'completed' || scan.status === 'failed') {
+    const decision = pollingDecision(scan.status)
+    if (decision === 'completed' || decision === 'failed') {
       return scan
+    }
+    if (decision === 'unexpected') {
+      throw new Error(`Unexpected VigilWeave scan status "${scan.status}" for scan ${scanId}.`)
     }
     await new Promise((resolve) => setTimeout(resolve, pollIntervalSeconds * 1000))
   }

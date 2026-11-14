@@ -56,27 +56,31 @@ def verify_workos_jwt(access_token: str) -> dict[str, Any]:
             options={"verify_iss": False, "verify_aud": False},
         )
 
-        print(
-            "verify_workos_jwt_ok",
-            {
-                "iss": claims.get("iss"),
-                "sub": claims.get("sub"),
-                "sid": claims.get("sid"),
-                "aud": claims.get("aud"),
-            },
-            flush=True,
-        )
+        allowed_issuers = {
+            "https://api.workos.com",
+            f"https://api.workos.com/user_management/{settings.workos_client_id}",
+        }
+        if claims.get("iss") not in allowed_issuers:
+            raise JWTVerificationError("Unexpected token issuer")
+        if not isinstance(claims.get("sub"), str) or not claims["sub"].strip():
+            raise JWTVerificationError("Token subject is required")
+        audience = claims.get("aud")
+        if audience is not None:
+            audiences = audience if isinstance(audience, list) else [audience]
+            if settings.workos_client_id not in audiences:
+                raise JWTVerificationError("Unexpected token audience")
 
         return claims
+    except JWTVerificationError:
+        raise
     except jwt.ExpiredSignatureError as exc:
-        print("verify_workos_jwt_error", "expired", str(exc), flush=True)
         raise JWTVerificationError("Token has expired") from exc
     except jwt.InvalidTokenError as exc:
-        print("verify_workos_jwt_error", exc.__class__.__name__, str(exc), flush=True)
-        raise JWTVerificationError(f"Invalid token: {exc}") from exc
+        logger.debug("WorkOS token rejected (%s)", type(exc).__name__)
+        raise JWTVerificationError("Invalid token") from exc
     except Exception as exc:
-        print("verify_workos_jwt_error", exc.__class__.__name__, str(exc), flush=True)
-        raise JWTVerificationError(f"Verification failed: {exc}") from exc
+        logger.warning("WorkOS verification failed (%s)", type(exc).__name__)
+        raise JWTVerificationError("Token verification failed") from exc
 
 
 @lru_cache(maxsize=1)
@@ -111,15 +115,8 @@ def get_user_from_jwt(session: Session, access_token: str) -> User | None:
     workos_user_id = claims.get("sub")
 
     if not workos_user_id:
-        print("get_user_from_jwt_missing_sub", flush=True)
         return None
 
     user = session.exec(select(User).where(User.workos_user_id == workos_user_id)).first()
-
-    print(
-        "get_user_from_jwt_result",
-        {"workos_user_id": workos_user_id, "found": user is not None},
-        flush=True,
-    )
 
     return user

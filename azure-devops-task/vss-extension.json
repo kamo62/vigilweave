@@ -3,7 +3,7 @@
   "id": "vigilweave-azure-devops",
   "name": "VigilWeave Azure DevOps",
   "publisher": "vigilweave",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Azure DevOps extension providing the VigilWeave scan task.",
   "categories": [
     "Azure Pipelines"

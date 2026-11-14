@@ -8,7 +8,8 @@ export function ScmConnections() {
         <p className="text-muted-foreground">
           Connect VigilWeave to your source code management platforms to scan
           private repositories. VigilWeave supports GitHub, GitLab, Bitbucket,
-          and Azure DevOps via personal access tokens (PATs).
+          and Azure DevOps. Authentication and discovery support vary by provider;
+          a successful connection test does not establish repository or clone access.
         </p>
       </div>
 
@@ -40,7 +41,8 @@ export function ScmConnections() {
                 <td className="px-4 py-2">Personal Access Token (classic or fine-grained)</td>
                 <td className="px-4 py-2">
                   <code className="bg-muted px-1 rounded font-mono text-xs">repo</code>{" "}
-                  (full control of private repositories)
+                  for classic PATs, plus read:org for organisation discovery.
+                  Fine-grained PATs need selected repositories, Metadata read and Contents read.
                 </td>
               </tr>
               <tr>
@@ -57,10 +59,11 @@ export function ScmConnections() {
                 <td className="px-4 py-2 font-medium text-foreground">
                   Bitbucket
                 </td>
-                <td className="px-4 py-2">App Password</td>
+                <td className="px-4 py-2">API token compatibility requires follow-up</td>
                 <td className="px-4 py-2">
-                  <code className="bg-muted px-1 rounded font-mono text-xs">repository:read</code>,{" "}
-                  <code className="bg-muted px-1 rounded font-mono text-xs">project:read</code>
+                  Current API tokens use read:user:bitbucket, read:workspace:bitbucket
+                  and read:repository:bitbucket. App passwords are retired. The client
+                  currently shares one REST/Git identity and uses a legacy workspace endpoint.
                 </td>
               </tr>
               <tr>
@@ -107,7 +110,8 @@ export function ScmConnections() {
           </li>
           <li>
             Paste your personal access token. For <strong>Bitbucket</strong>,
-            also enter your Bitbucket username. For{" "}
+            the current shared REST/Git identity field has API-token compatibility
+            limitations. Verify REST access and Git cloning separately. For{" "}
             <strong>Azure DevOps</strong>, enter your organization name.
           </li>
           <li>
@@ -124,13 +128,13 @@ export function ScmConnections() {
             Token Security
           </h4>
           <p className="text-sm text-muted-foreground">
-            Tokens are encrypted using Fernet symmetric encryption derived from
-            your instance&rsquo;s{" "}
+            Stored tokens use Fernet encryption derived from{" "}
             <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-xs">
-              SESSION_SECRET
+              TOKEN_ENCRYPTION_KEY
             </code>
-            . Tokens are never stored in plaintext and are never logged or
-            exposed in API responses &mdash; only a masked version is shown.
+            , with session-secret fallbacks. Public connection responses show a
+            masked token. Git cloning still uses transient plaintext credentials
+            in subprocess arguments and the temporary checkout configuration.
           </p>
         </div>
       </section>
@@ -142,9 +146,9 @@ export function ScmConnections() {
         </h3>
         <p className="text-muted-foreground">
           After creating a connection, click the <strong>Test</strong> button in
-          the connections list. VigilWeave will verify that the token is valid
-          and has the required permissions by making an authenticated API call
-          to the provider.
+          the connections list. VigilWeave makes one identity request, or an Azure
+          project-list request. Repository discovery, SSO approval and Git clone
+          permissions must be verified separately.
         </p>
       </section>
 
@@ -179,9 +183,8 @@ export function ScmConnections() {
             Browse the repository list and select the repositories to import.
           </li>
           <li>
-            Click <strong>Import Selected</strong>. VigilWeave creates a project
-            for each selected repository and links it to the SCM connection for
-            authenticated cloning.
+            Create the project with the selected repositories. The project links
+            retain the SCM connection for later authenticated scans.
           </li>
         </ol>
       </section>
@@ -203,6 +206,7 @@ curl -X POST http://localhost:8000/api/v1/scm-connections \\
   -d '{
     "name": "GitHub - MyOrg",
     "provider": "github",
+    "base_url": "https://api.github.com",
     "token": "YOUR_SCM_TOKEN_HERE"
   }'
 
@@ -219,14 +223,12 @@ curl -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   "http://localhost:8000/api/v1/scm-connections/1/repositories?org=my-org"
 
 # Import repositories
-curl -X POST http://localhost:8000/api/v1/scm-connections/1/import \\
+curl -X POST http://localhost:8000/api/v1/scm-connections/1/import-repos \\
   -H "Authorization: Bearer YOUR_API_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "repos": [
-      { "name": "api-service", "clone_url": "https://github.com/my-org/api-service.git" },
-      { "name": "web-app", "clone_url": "https://github.com/my-org/web-app.git" }
-    ]
+    "project_key": "example-project",
+    "repos": ["https://github.com/my-org/api-service.git"]
   }'`}</pre>
         </div>
       </section>

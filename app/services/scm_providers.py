@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Protocol
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 import httpx
 
@@ -13,6 +13,63 @@ from app.models.scm_connection import SCMOrganization, SCMProvider, SCMRepositor
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 15.0
+
+
+def _validated_destination(url: str, base: str, *, path_prefix: str = ""):
+    """Keep credentials on their configured HTTPS origin and deployment path."""
+    parsed, expected = urlsplit(url), urlsplit(base)
+    if (
+        url != url.strip()
+        or any(ord(char) < 32 for char in url)
+        or parsed.scheme != "https"
+        or expected.scheme != "https"
+        or not parsed.hostname
+        or parsed.hostname != expected.hostname
+        or (parsed.port or 443) != (expected.port or 443)
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+        or "\\" in url
+    ):
+        raise ValueError("SCM destination must match the configured HTTPS origin")
+    path = parsed.path
+    # Reject escaped traversal, including repeated encoding, before prefix matching.
+    for _ in range(8):
+        decoded = unquote(path)
+        if decoded == path:
+            break
+        path = decoded
+    if any(part in {".", ".."} for part in path.split("/")) or "\\" in path:
+        raise ValueError("SCM destination contains an invalid path")
+    prefix = unquote(path_prefix).rstrip("/")
+    if prefix and not path.startswith(prefix + "/"):
+        raise ValueError("SCM destination is outside the configured path")
+    return parsed
+
+
+def _credential_url(url: str, base: str, username: str, token: str, *, prefix: str = "") -> str:
+    original = urlsplit(url)
+    if original.password is not None:
+        raise ValueError("SCM clone URL must not contain a password")
+    # Azure and Bitbucket return username-bearing HTTPS clone URLs. Replace that
+    # username after parsing the actual destination, rather than appending userinfo.
+    if original.username is not None:
+        url = urlunsplit(original._replace(netloc=original.netloc.rsplit("@", 1)[-1]))
+    parsed = _validated_destination(url, base, path_prefix=prefix)
+    if parsed.query:
+        raise ValueError("SCM clone URL must not contain a query")
+    credentials = f"{quote(username, safe='')}:{quote(token, safe='')}"
+    return urlunsplit(parsed._replace(netloc=f"{credentials}@{parsed.netloc}"))
+
+
+def _continuation_url(url: str | None, base: str, seen: set[str]) -> str | None:
+    if url is None:
+        return None
+    _validated_destination(url, base, path_prefix=f"{urlsplit(base).path}/2.0")
+    if url in seen:
+        raise ValueError("SCM pagination repeated a continuation URL")
+    seen.add(url)
+    return url
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +158,7 @@ class GitHubClient:
         endpoint = (
             f"{self._base}/user/repos"
             if not org or org == "_user"
-            else f"{self._base}/orgs/{org}/repos"
+            else f"{self._base}/orgs/{quote(org, safe='')}/repos"
         )
         params: dict = {"per_page": 100, "page": 1, "type": "all", "sort": "updated"}
         if not org or org == "_user":
@@ -141,11 +198,9 @@ class GitHubClient:
         return repos
 
     def authenticated_clone_url(self, repo_url: str) -> str:
-        # Inject the runtime token for cloning; never log the returned URL.
-        if "://" in repo_url:
-            scheme, rest = repo_url.split("://", 1)
-            return f"{scheme}://x-access-token:{quote(self._token, safe='')}@{rest}"
-        return repo_url
+        parsed = urlsplit(self._base)
+        base = "https://github.com" if parsed.hostname == "api.github.com" else self._base
+        return _credential_url(repo_url, base, "x-access-token", self._token)
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +266,7 @@ class GitLabClient:
         endpoint = (
             f"{self._base}/api/v4/projects"
             if not org or org == "_user"
-            else f"{self._base}/api/v4/groups/{org}/projects"
+            else f"{self._base}/api/v4/groups/{quote(org, safe='')}/projects"
         )
         params: dict = {"per_page": 100, "page": 1, "order_by": "last_activity_at", "sort": "desc"}
         if not org or org == "_user":
@@ -244,11 +299,9 @@ class GitLabClient:
         return repos
 
     def authenticated_clone_url(self, repo_url: str) -> str:
-        # Inject the runtime token for cloning; never log the returned URL.
-        if "://" in repo_url:
-            scheme, rest = repo_url.split("://", 1)
-            return f"{scheme}://oauth2:{quote(self._token, safe='')}@{rest}"
-        return repo_url
+        return _credential_url(
+            repo_url, self._base, "oauth2", self._token, prefix=urlsplit(self._base).path
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +310,7 @@ class GitLabClient:
 
 
 class BitbucketClient:
-    """Bitbucket Cloud REST API client using App Password / API Token."""
+    """Bitbucket Cloud REST client with a shared REST/Git Basic-auth identity."""
 
     def __init__(
         self,
@@ -283,11 +336,12 @@ class BitbucketClient:
 
     def list_organizations(self) -> list[SCMOrganization]:
         workspaces: list[SCMOrganization] = []
-        url: str | None = f"{self._base}/2.0/user/permissions/workspaces"
+        initial_url = f"{self._base}/2.0/user/permissions/workspaces"
+        url: str | None = initial_url
+        seen = {initial_url}
+        params: dict[str, str | int] | None = {"pagelen": 100}
         while url:
-            resp = httpx.get(
-                url, auth=self._auth, params={"pagelen": 100}, timeout=_DEFAULT_TIMEOUT
-            )
+            resp = httpx.get(url, auth=self._auth, params=params, timeout=_DEFAULT_TIMEOUT)
             resp.raise_for_status()
             data = resp.json()
             for item in data.get("values", []):
@@ -299,17 +353,21 @@ class BitbucketClient:
                         avatar_url=ws.get("links", {}).get("avatar", {}).get("href"),
                     )
                 )
-            url = data.get("next")
+            url = _continuation_url(data.get("next"), self._base, seen)
+            params = None  # Continuations already contain their own query.
         return workspaces
 
     def list_repositories(self, org: str) -> list[SCMRepository]:
         repos: list[SCMRepository] = []
-        url: str | None = f"{self._base}/2.0/repositories/{org}"
+        initial_url = f"{self._base}/2.0/repositories/{quote(org, safe='')}"
+        url: str | None = initial_url
+        seen = {initial_url}
+        params: dict[str, str | int] | None = {"role": "member", "pagelen": 100}
         while url:
             resp = httpx.get(
                 url,
                 auth=self._auth,
-                params={"role": "member", "pagelen": 100},
+                params=params,
                 timeout=_DEFAULT_TIMEOUT,
             )
             resp.raise_for_status()
@@ -335,17 +393,17 @@ class BitbucketClient:
                         updated_at=repo.get("updated_on"),
                     )
                 )
-            url = data.get("next")
+            url = _continuation_url(data.get("next"), self._base, seen)
+            params = None
         return repos
 
     def authenticated_clone_url(self, repo_url: str) -> str:
-        # Inject the runtime credentials for cloning; never log the returned URL.
-        if "://" in repo_url:
-            scheme, rest = repo_url.split("://", 1)
-            encoded_username = quote(self._username, safe="")
-            encoded_token = quote(self._token, safe="")
-            return f"{scheme}://{encoded_username}:{encoded_token}@{rest}"
-        return repo_url
+        base = (
+            "https://bitbucket.org"
+            if urlsplit(self._base).hostname == "api.bitbucket.org"
+            else self._base
+        )
+        return _credential_url(repo_url, base, self._username, self._token)
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +425,7 @@ class AzureDevOpsClient:
     def test_connection(self) -> tuple[bool, str, str | None]:
         try:
             resp = httpx.get(
-                f"{self._base}/{self._org}/_apis/projects",
+                f"{self._base}/{quote(self._org, safe='')}/_apis/projects",
                 auth=self._auth,
                 params={"$top": 1, "api-version": "7.1"},
                 timeout=_DEFAULT_TIMEOUT,
@@ -382,7 +440,7 @@ class AzureDevOpsClient:
     def list_organizations(self) -> list[SCMOrganization]:
         """List projects within the Azure DevOps organization (projects are the grouping unit)."""
         projects: list[SCMOrganization] = []
-        url = f"{self._base}/{self._org}/_apis/projects"
+        url = f"{self._base}/{quote(self._org, safe='')}/_apis/projects"
         continuation_token: str | None = None
 
         while True:
@@ -411,8 +469,10 @@ class AzureDevOpsClient:
     def list_repositories(self, org: str) -> list[SCMRepository]:
         """List repositories within an Azure DevOps project."""
         repos: list[SCMRepository] = []
+        organization_path = quote(self._org, safe="")
+        project_path = quote(org, safe="")
         resp = httpx.get(
-            f"{self._base}/{self._org}/{org}/_apis/git/repositories",
+            f"{self._base}/{organization_path}/{project_path}/_apis/git/repositories",
             auth=self._auth,
             params={"api-version": "7.1"},
             timeout=_DEFAULT_TIMEOUT,
@@ -437,11 +497,15 @@ class AzureDevOpsClient:
         return repos
 
     def authenticated_clone_url(self, repo_url: str) -> str:
-        # Inject the runtime token for cloning; never log the returned URL.
-        if "://" in repo_url:
-            scheme, rest = repo_url.split("://", 1)
-            return f"{scheme}://{quote(self._token, safe='')}@{rest}"
-        return repo_url
+        if not self._org:
+            raise ValueError("Azure DevOps organisation is required")
+        return _credential_url(
+            repo_url,
+            self._base,
+            "pat",
+            self._token,
+            prefix=f"{urlsplit(self._base).path}/{self._org}",
+        )
 
 
 # ---------------------------------------------------------------------------

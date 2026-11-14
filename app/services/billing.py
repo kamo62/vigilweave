@@ -595,7 +595,7 @@ def _sync_self_hosted_fulfillment(
                 f"/v1/fulfillment/licenses/{tenant.self_hosted_license_id}/reactivate",
                 {},
             )
-            record = _mapping(reactivated.get("record"))
+            record = _mapping(reactivated)
             return (
                 int(record.get("id") or tenant.self_hosted_license_id),
                 str(record.get("key_prefix") or tenant.self_hosted_license_key_prefix or ""),
@@ -635,7 +635,7 @@ def _sync_self_hosted_fulfillment(
             f"/v1/fulfillment/licenses/{tenant.self_hosted_license_id}/revoke",
             {"reason": f"Billing status changed to {billing_status.value}"},
         )
-        record = _mapping(revoked.get("record"))
+        record = _mapping(revoked)
         return (
             int(record.get("id") or tenant.self_hosted_license_id),
             str(record.get("key_prefix") or tenant.self_hosted_license_key_prefix or ""),

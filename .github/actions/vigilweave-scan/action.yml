@@ -14,6 +14,9 @@ inputs:
   repo:
     description: 'Repository identifier (defaults to GITHUB_REPOSITORY)'
     required: false
+  project_key:
+    description: 'Optional VigilWeave project key for project and SCM credential mapping'
+    required: false
   branch:
     description: 'Branch name (defaults to current branch)'
     required: false

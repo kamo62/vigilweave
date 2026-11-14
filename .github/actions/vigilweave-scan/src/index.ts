@@ -7,12 +7,19 @@ import * as github from '@actions/github'
 import { VigilWeaveClient } from './client'
 import { evaluateGates } from './gates'
 import { buildPrComment, upsertGitHubPrComment } from './pr'
+import { pollingDecision } from './scanStatus'
+import { resolveRepositoryUrl } from './repository'
 
 async function main(): Promise<void> {
   try {
     const vigilweaveUrl = core.getInput('vigilweave_url', { required: true })
     const apiKey = core.getInput('api_key', { required: true })
-    const repo = core.getInput('repo') || process.env.GITHUB_REPOSITORY || ''
+    const repo = resolveRepositoryUrl(
+      core.getInput('repo'),
+      process.env.GITHUB_REPOSITORY || '',
+      process.env.GITHUB_SERVER_URL || 'https://github.com',
+    )
+    const projectKey = core.getInput('project_key') || undefined
     const branch =
       core.getInput('branch') ||
       process.env.GITHUB_HEAD_REF ||
@@ -40,6 +47,7 @@ async function main(): Promise<void> {
     core.info(`Creating ${scanType} scan for ${repo}...`)
     const created = await client.createScan({
       repo,
+      project_key: projectKey,
       branch,
       commit,
       scan_type: scanType,
@@ -61,8 +69,15 @@ async function main(): Promise<void> {
     await fs.mkdir(path.dirname(sarifPath), { recursive: true })
     await fs.writeFile(sarifPath, JSON.stringify(sarif, null, 2), 'utf-8')
 
-    // Set outputs
-    core.setOutput('quality_gate_passed', String(scan.quality_gate_passed ?? true))
+    const gates = evaluateGates(stats, {
+      failOnCritical,
+      failOnHigh,
+      qualityGatePassed: scan.quality_gate_passed,
+      scanStatus: scan.status,
+    })
+
+    // Set outputs after the scan and its diagnostics have been collected.
+    core.setOutput('quality_gate_passed', String(gates.passed))
     core.setOutput('total_findings', String(stats.total_findings))
     core.setOutput('sarif_path', sarifPath)
 
@@ -84,8 +99,6 @@ async function main(): Promise<void> {
       }
     }
 
-    // Quality gates
-    const gates = evaluateGates(stats, { failOnCritical, failOnHigh })
     if (!gates.passed) {
       core.setFailed(gates.reasons.join('; '))
     }
@@ -104,8 +117,12 @@ async function pollForCompletion(
   const deadline = Date.now() + timeoutSeconds * 1000
   while (Date.now() < deadline) {
     const scan = await client.getScan(scanId)
-    if (scan.status === 'completed' || scan.status === 'failed') {
+    const decision = pollingDecision(scan.status)
+    if (decision === 'completed' || decision === 'failed') {
       return scan
+    }
+    if (decision === 'unexpected') {
+      throw new Error(`Unexpected VigilWeave scan status "${scan.status}" for scan ${scanId}.`)
     }
     core.info(`Scan ${scanId} status: ${scan.status} — polling again in ${pollIntervalSeconds}s...`)
     await new Promise((resolve) => setTimeout(resolve, pollIntervalSeconds * 1000))

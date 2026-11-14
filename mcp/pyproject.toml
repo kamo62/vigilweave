@@ -1,11 +1,11 @@
 [project]
 name = "vigilweave-mcp"
-version = "0.1.0"
+version = "0.2.0"
 license = { text = "MIT" }
 description = "MCP server for VigilWeave — exposes scan, finding, and project tools to AI assistants"
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.3.0,<2",
     "httpx>=0.28.0",
 ]
 
