@@ -32,5 +32,10 @@ infra/azure/arm64-aks/.env.generated
 /[Tt]ask.md
 /[Tt]asks.md
 
+# Local agent instructions (not published)
+AGENTS.md
+Agents.md
+agents.md
+
 # Local reference material (never execute or publish)
 /DO-NOT-RUN/
