@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./vigilweave.db"
     redis_url: str = "redis://localhost:6379/0"
     celery_task_always_eager: bool = True
+    scan_heartbeat_interval_seconds: int = 30
+    scan_stale_after_seconds: int = 300
+    scan_recovery_batch_size: int = 100
     allowed_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -146,6 +149,16 @@ class Settings(BaseSettings):
     paddle_price_id_self_hosted_enterprise: str | None = None
     license_server_api_base_url: str | None = None
     license_server_shared_secret: str | None = None
+
+    @model_validator(mode="after")
+    def validate_scan_lifecycle(self) -> "Settings":
+        if (
+            self.scan_heartbeat_interval_seconds < 1
+            or self.scan_stale_after_seconds <= self.scan_heartbeat_interval_seconds * 2
+            or not 1 <= self.scan_recovery_batch_size <= 1000
+        ):
+            raise ValueError("Invalid scan lifecycle intervals or batch size")
+        return self
 
     @model_validator(mode="after")
     def include_runtime_allowed_origins(self) -> "Settings":

@@ -216,6 +216,7 @@ def test_assigned_policy_controls_gate_and_failed_tool_blocks_pass(api_client, m
         finding = _finding("app.py")
         finding.scan_id = scan.id
         session.add(finding)
+        session.add(ToolExecution(scan_id=scan.id, tool="completed", status="completed"))
         session.commit()
         scanner.finalize_scan(session, scan.id, {}, [], [])
         session.refresh(scan)

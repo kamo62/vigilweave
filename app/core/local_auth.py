@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import secrets
 
 from sqlmodel import Session
@@ -29,10 +30,7 @@ def hash_password(password: str) -> str:
         salt.encode("utf-8"),
         _LOCAL_PASSWORD_ITERATIONS,
     )
-    return (
-        f"{_LOCAL_PASSWORD_ALGORITHM}${_LOCAL_PASSWORD_ITERATIONS}"
-        f"${salt}${derived.hex()}"
-    )
+    return f"{_LOCAL_PASSWORD_ALGORITHM}${_LOCAL_PASSWORD_ITERATIONS}${salt}${derived.hex()}"
 
 
 def verify_password(password: str, stored_hash: str | None) -> bool:
@@ -63,14 +61,16 @@ def verify_password(password: str, stored_hash: str | None) -> bool:
     return hmac.compare_digest(candidate, digest)
 
 
-def set_local_session(response, *, user_id: int, max_age: int = 86400) -> None:
+def set_local_session(
+    response, *, user_id: int | None, session_version: str, max_age: int = 86400
+) -> None:
     """Set the local-user browser session cookie."""
 
     set_session_cookie(
         response=response,
         key="vigilweave_session",
         purpose="local_session",
-        value=str(user_id),
+        value=make_session_binding(user_id, session_version),
         max_age=max_age,
     )
 
@@ -82,13 +82,29 @@ def get_local_user_from_session(session: Session, session_cookie: str | None) ->
     if user_id_value is None:
         return None
 
-    try:
-        user_id = int(user_id_value)
-    except ValueError as exc:
-        raise SessionCookieError("Invalid local session cookie") from exc
-
-    user = session.get(User, user_id)
-    if user is None or user.auth_provider != "local":
+    user, _ = resolve_session_binding(session, user_id_value)
+    if user.auth_provider != "local":
         raise LocalAuthError("Local session does not reference an active local user")
-
     return user
+
+
+def make_session_binding(user_id: int | None, version: str, token: str = "") -> str:
+    """Bind a browser credential to a particular account generation."""
+    if user_id is None:
+        raise SessionCookieError("Cannot bind an unpersisted user")
+    return json.dumps({"user_id": user_id, "version": version, "token": token})
+
+
+def resolve_session_binding(session: Session, value: str) -> tuple[User, str]:
+    """Resolve only a current application-issued browser credential."""
+    try:
+        data = json.loads(value)
+        user_id, version, token = data["user_id"], data["version"], data["token"]
+        if type(user_id) is not int or not isinstance(version, str) or not isinstance(token, str):
+            raise ValueError
+    except (ValueError, TypeError, KeyError) as exc:
+        raise SessionCookieError("Invalid session binding") from exc
+    user = session.get(User, user_id, populate_existing=True)
+    if user is None or not hmac.compare_digest(user.session_version, version):
+        raise SessionCookieError("Revoked session")
+    return user, token

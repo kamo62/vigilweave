@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hmac
 import json
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +11,6 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.database import get_session
-from app.core.network_security import is_safe_repo_url
 from app.core.rate_limiter import WEBHOOK_RATE_LIMIT, check_rate_limit
 from app.models import (
     AzureWebhookResponse,
@@ -20,12 +18,9 @@ from app.models import (
     BillingProvider,
     GitHubWebhookResponse,
     PaddleWebhookIngestResponse,
-    Scan,
-    ScanType,
 )
 from app.services.billing import process_paddle_event, verify_paddle_webhook_signature
 from app.services.github_app import handle_github_event, verify_github_webhook_signature
-from app.services.project_mapping import resolve_webhook_project_link
 from app.services.webhook_delivery import (
     build_payload_delivery_id,
     claim_delivery,
@@ -175,12 +170,18 @@ async def paddle_webhook(
         raise
 
 
-@router.post("/azure-devops", response_model=AzureWebhookResponse)
+@router.post(
+    "/azure-devops",
+    response_model=AzureWebhookResponse,
+    responses={
+        503: {"description": "Missing webhook secret or tenant-owned PR subscription binding"}
+    },
+)
 async def azure_devops_webhook(
     request: Request,
     session: Session = Depends(get_session),
 ) -> AzureWebhookResponse:
-    """Receive Azure DevOps service-hook events for pull requests."""
+    """Receive service hooks. PR events require a tenant-owned subscription binding."""
 
     check_rate_limit(request, WEBHOOK_RATE_LIMIT, resource_name="webhook")
 
@@ -207,6 +208,12 @@ async def azure_devops_webhook(
         ) from exc
 
     event_type = str(payload.get("eventType") or "")
+    # A deployment-wide secret does not identify a tenant or project subscription.
+    if event_type in {"git.pullrequest.created", "git.pullrequest.updated"}:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Azure webhook tenant ownership is not configured",
+        )
     delivery_id = request.headers.get("X-VSS-NotificationId") or build_payload_delivery_id(
         "azure-devops", payload
     )
@@ -228,162 +235,13 @@ async def azure_devops_webhook(
             return AzureWebhookResponse.model_validate(recorded)
         raise HTTPException(status_code=409, detail="Webhook delivery is already being processed")
 
-    if event_type not in {"git.pullrequest.created", "git.pullrequest.updated"}:
-        response = AzureWebhookResponse(
-            accepted=True,
-            event=event_type,
-            message="Event ignored",
-        )
-        record_delivery(
-            session,
-            provider="azure-devops",
-            delivery_id=delivery_id,
-            tenant_slug=None,
-            project_id=None,
-            response_payload=response.model_dump(),
-        )
-        return response
-
-    resource = payload.get("resource") or {}
-    repository = resource.get("repository") or {}
-    repo_url = repository.get("remoteUrl") or repository.get("url")
-    source_ref = resource.get("sourceRefName") or resource.get("targetRefName")
-    branch = _normalize_branch(source_ref)
-    commit = (
-        (resource.get("lastMergeSourceCommit") or {}).get("commitId")
-        or (resource.get("sourceCommit") or {}).get("commitId")
-        or (resource.get("lastMergeCommit") or {}).get("commitId")
-    )
-    if not isinstance(repo_url, str) or not repo_url:
-        response = AzureWebhookResponse(
-            accepted=False,
-            event=event_type,
-            message="Missing repository URL in event payload",
-        )
-        record_delivery(
-            session,
-            provider="azure-devops",
-            delivery_id=delivery_id,
-            tenant_slug=None,
-            project_id=None,
-            response_payload=response.model_dump(),
-        )
-        return response
-    if not is_safe_repo_url(repo_url):
-        response = AzureWebhookResponse(
-            accepted=False,
-            event=event_type,
-            message="Unsupported repository URL scheme in webhook payload",
-        )
-        record_delivery(
-            session,
-            provider="azure-devops",
-            delivery_id=delivery_id,
-            tenant_slug=None,
-            project_id=None,
-            response_payload=response.model_dump(),
-        )
-        return response
-
-    try:
-        project_mapping = resolve_webhook_project_link(session, repo=repo_url)
-    except HTTPException as exc:
-        response = AzureWebhookResponse(
-            accepted=False,
-            event=event_type,
-            message=str(exc.detail),
-        )
-        record_delivery(
-            session,
-            provider="azure-devops",
-            delivery_id=delivery_id,
-            tenant_slug=None,
-            project_id=None,
-            response_payload=response.model_dump(),
-        )
-        return response
-
-    if project_mapping is None:
-        response = AzureWebhookResponse(
-            accepted=False,
-            event=event_type,
-            message="Repository is not linked to a project",
-        )
-        record_delivery(
-            session,
-            provider="azure-devops",
-            delivery_id=delivery_id,
-            tenant_slug=None,
-            project_id=None,
-            response_payload=response.model_dump(),
-        )
-        return response
-
-    project, project_repo = project_mapping
-
-    scan = Scan(
-        tenant_slug=project.tenant_slug,
-        project_id=project.id,
-        repo=repo_url,
-        branch=branch,
-        commit=commit if isinstance(commit, str) else None,
-        source="azure-service-hook",
-        scan_type=_azure_default_scan_type(),
-        include_quality_metrics=True,
-        scan_metadata={
-            "actor": "azure-service-hook",
-            "requested_tools": [],
-            "scm_connection_id": project_repo.scm_connection_id,
-            "project_key": project.key,
-            "azure": {
-                "event_type": event_type,
-                "project_id": (resource.get("repository") or {}).get("project", {}).get("id"),
-                "pull_request_id": resource.get("pullRequestId"),
-            },
-        },
-    )
-    session.add(scan)
-    session.commit()
-    session.refresh(scan)
-
-    if settings.celery_task_always_eager:
-        from app.services.scanner import execute_scan
-
-        execute_scan(session, scan.id)
-    else:
-        from app.tasks.scan_tasks import run_scan
-
-        run_scan.delay(scan.id)
-
-    response = AzureWebhookResponse(
-        accepted=True,
-        event=event_type,
-        message="Pull request scan queued",
-        scan_id=scan.id,
-    )
+    response = AzureWebhookResponse(accepted=True, event=event_type, message="Event ignored")
     record_delivery(
         session,
         provider="azure-devops",
         delivery_id=delivery_id,
-        tenant_slug=project.tenant_slug,
-        project_id=project.id,
+        tenant_slug=None,
+        project_id=None,
         response_payload=response.model_dump(),
     )
     return response
-
-
-def _normalize_branch(ref: Any) -> str | None:
-    if not isinstance(ref, str) or not ref:
-        return None
-    prefix = "refs/heads/"
-    if ref.startswith(prefix):
-        return ref[len(prefix) :]
-    return ref
-
-
-def _azure_default_scan_type() -> ScanType:
-    value = settings.azure_default_scan_type.strip().lower()
-    try:
-        return ScanType(value)
-    except ValueError:
-        return ScanType.FAST

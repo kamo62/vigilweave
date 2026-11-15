@@ -6,8 +6,11 @@ from typing import Any
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
+from app.core import database
 from app.core.config import settings
+from app.models import TenantGitHubInstallation
 from app.services import azure_marketplace, sonarqube
 from app.tasks import scan_tasks
 
@@ -34,6 +37,17 @@ def test_e2e_github_webhook_signature_action_and_queue(
     admin_headers = bootstrap_api_key(tenant_slug="acme", name="acme-admin")
     repo_url = "https://github.com/octo/example.git"
     _create_project(api_client, admin_headers, key="github-example", repo=repo_url)
+    with Session(database.engine) as session:
+        session.add(
+            TenantGitHubInstallation(tenant_slug="acme", installation_id=2, account_login="octo")
+        )
+        session.commit()
+    linked = api_client.post(
+        "/api/v1/projects/github-example/repos",
+        headers=admin_headers,
+        json={"repos": [repo_url], "github_installation_id": 2},
+    )
+    assert linked.status_code == 200, linked.text
     monkeypatch.setattr(settings, "github_webhook_secret", "gh-secret")
     monkeypatch.setattr(settings, "celery_task_always_eager", False)
     monkeypatch.setattr(settings, "rate_limit_webhook_max_requests", 1000)
@@ -88,7 +102,7 @@ def test_e2e_github_webhook_signature_action_and_queue(
         },
         "pull_request": {
             "number": 9,
-            "head": {"sha": "abcdef", "ref": "feature/auth"},
+            "head": {"sha": "abcdef123456", "ref": "feature/auth"},
             "html_url": "https://github.com/octo/example/pull/9",
         },
     }
@@ -248,8 +262,8 @@ def test_e2e_azure_webhook_security_and_event_handling(
         headers={"X-CodeGuard-Webhook-Secret": "az-secret"},
         json={"eventType": "git.pullrequest.updated", "resource": {"repository": {}}},
     )
-    assert missing_repo.status_code == 200
-    assert missing_repo.json()["accepted"] is False
+    assert missing_repo.status_code == 503
+    assert missing_repo.json()["detail"] == "Azure webhook tenant ownership is not configured"
 
     accepted = api_client.post(
         "/api/v1/webhooks/azure-devops",
@@ -267,9 +281,8 @@ def test_e2e_azure_webhook_security_and_event_handling(
             },
         },
     )
-    assert accepted.status_code == 200
-    assert accepted.json()["accepted"] is True
-    assert accepted.json()["scan_id"] is not None
+    assert accepted.status_code == 503
+    assert accepted.json()["detail"] == "Azure webhook tenant ownership is not configured"
 
     unsupported = api_client.post(
         "/api/v1/webhooks/azure-devops",
@@ -287,15 +300,12 @@ def test_e2e_azure_webhook_security_and_event_handling(
             },
         },
     )
-    assert unsupported.status_code == 200
-    assert unsupported.json()["accepted"] is False
+    assert unsupported.status_code == 503
+    assert unsupported.json()["detail"] == "Azure webhook tenant ownership is not configured"
 
     scans = api_client.get("/api/v1/scans/", headers=admin_headers)
     assert scans.status_code == 200
-    assert any(
-        scan["source"] == "azure-service-hook" and scan["project_key"] == "azure-payments"
-        for scan in scans.json()
-    )
+    assert scans.json() == []
 
 
 def test_e2e_sonar_sync_error_path(

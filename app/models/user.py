@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, datetime
 from enum import Enum
 
-from sqlalchemy import Index, text
+from sqlalchemy import Index, event, inspect, text
 from sqlmodel import Field, SQLModel
 
 
@@ -61,6 +62,7 @@ class User(UserBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     workos_user_id: str | None = Field(default=None, index=True, unique=True)
     password_hash: str | None = None
+    session_version: str = Field(default_factory=lambda: secrets.token_urlsafe(32), nullable=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_login_at: datetime | None = Field(default=None)
 
@@ -127,3 +129,22 @@ class LocalUserLogin(SQLModel):
 
     email: str
     password: str
+
+
+@event.listens_for(User, "before_update")
+def _revoke_on_security_change(mapper, connection, target: User) -> None:
+    """Invalidate browser credentials when account authority or identity changes."""
+    del mapper, connection
+    state = inspect(target)
+    assert state is not None
+    fields = (
+        "role",
+        "platform_role",
+        "password_hash",
+        "auth_provider",
+        "tenant_slug",
+        "workos_user_id",
+        "workos_org_id",
+    )
+    if any(state.attrs[name].history.has_changes() for name in fields):
+        target.session_version = secrets.token_urlsafe(32)

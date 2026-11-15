@@ -4,9 +4,11 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Optional
 
+from pydantic import field_validator
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, Relationship, SQLModel
 
+from app.core.git_refs import validate_branch, validate_commit
 from app.models.file_metrics import FileMetricsPublic
 
 if TYPE_CHECKING:
@@ -94,6 +96,8 @@ class Scan(ScanBase, table=True):
     )
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
+    lifecycle_token: str | None = Field(default=None, index=True)
+    lifecycle_heartbeat_at: datetime | None = None
     scan_metadata: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
 
     findings: list["Finding"] = Relationship(
@@ -136,11 +140,20 @@ class ScanCreate(SQLModel):
 
     repo: str
     project_key: str | None = None
-    branch: str | None = None
-    commit: str | None = None
+    branch: str | None = Field(
+        default=None,
+        description="Git branch name; refs/heads/ is accepted. Revision expressions are rejected.",
+    )
+    commit: str | None = Field(
+        default=None,
+        description="Detached commit object ID containing 7 to 64 hexadecimal characters.",
+    )
     scan_type: ScanType = ScanType.COMPREHENSIVE
     tools: list[str] | None = None
     include_quality_metrics: bool = True
+
+    _valid_branch = field_validator("branch")(validate_branch)
+    _valid_commit = field_validator("commit")(validate_commit)
 
 
 class ToolExecutionPublic(ToolExecutionBase):

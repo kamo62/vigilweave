@@ -12,11 +12,12 @@ from urllib.parse import quote
 import httpx
 import jwt
 from fastapi import HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.core.git_refs import validate_branch, validate_commit
 from app.core.network_security import is_safe_repo_url
-from app.models import Scan, ScanStatus, ScanType
+from app.models import Scan, ScanStatus, ScanType, TenantGitHubInstallation
 from app.models.scm_connection import SCMRepository
 from app.services.project_mapping import resolve_webhook_project_link
 
@@ -193,7 +194,32 @@ def handle_github_event(
         }
 
     try:
-        project_mapping = resolve_webhook_project_link(session, repo=repo_url)
+        if not isinstance(installation_id, int) or isinstance(installation_id, bool):
+            raise ValueError("Invalid installation ID")
+        validate_branch(branch)
+        validate_commit(commit_sha)
+    except (ValueError, TypeError) as exc:
+        return {"accepted": False, "event": event, "action": action, "message": str(exc)}
+
+    installed = session.exec(
+        select(TenantGitHubInstallation).where(
+            TenantGitHubInstallation.installation_id == installation_id
+        )
+    ).first()
+    if installed is None:
+        return {
+            "accepted": False,
+            "event": event,
+            "action": action,
+            "message": "GitHub installation is not linked to a tenant",
+        }
+    try:
+        project_mapping = resolve_webhook_project_link(
+            session,
+            repo=repo_url,
+            tenant_slug=installed.tenant_slug,
+            installation_id=installation_id,
+        )
     except HTTPException as exc:
         return {
             "accepted": False,
@@ -267,14 +293,10 @@ def handle_github_event(
             session.add(scan)
             session.commit()
 
-    if settings.celery_task_always_eager:
-        from app.services.scanner import execute_scan
+    from app.services.scan_lifecycle import dispatch_scan
 
-        execute_scan(session, scan.id)
-    else:
-        from app.tasks.scan_tasks import run_scan
-
-        run_scan.delay(scan.id)
+    assert scan.id is not None
+    dispatch_scan(session, scan.id)
     session.refresh(scan)
 
     return {

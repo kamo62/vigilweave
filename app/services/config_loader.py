@@ -55,6 +55,17 @@ def get_enabled_tools(config: dict[str, Any] | None = None) -> dict[str, dict[st
     return {tool: config for tool, config in tools.items() if config.get("enabled", False)}
 
 
+def validate_tool_selection(
+    scan_type: str, selected: list[str] | None, config: dict[str, Any]
+) -> None:
+    """Reject invalid explicit analyser selections before any work is queued."""
+    if scan_type == "custom" and not selected:
+        raise ValueError("Custom scans require at least one enabled analyser ID")
+    invalid = sorted(set(selected or []) - set(get_enabled_tools(config)))
+    if invalid:
+        raise ValueError(f"Unknown or disabled analyser IDs: {', '.join(invalid)}")
+
+
 def get_tools_for_scan_type(scan_type: str, config: dict[str, Any] | None = None) -> list[str]:
     """Return tool ids configured for a scan type."""
 

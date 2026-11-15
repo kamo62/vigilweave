@@ -27,6 +27,21 @@ class ToolRunResult:
     error: str | None = None
 
 
+class _IncompleteReport(ValueError):
+    def __init__(self, message: str, findings: list[Finding]):
+        super().__init__(message)
+        self.findings = findings
+
+
+def _incomplete(tool: str, message: str, findings: list[Finding]) -> ToolRunResult:
+    return ToolRunResult(
+        findings=findings,
+        summary=f"{tool} failed",
+        status=ToolExecutionStatus.FAILED,
+        error=redact_sensitive_text(message)[:4000],
+    )
+
+
 def get_runtime_tool_capabilities(repo_path: Path | None = None) -> dict[str, bool]:
     """Return whether each configured tool can execute in the current environment."""
 
@@ -81,6 +96,7 @@ def run_tool(
         "grype": _run_grype,
     }
 
+    repo_path = repo_path.resolve()
     runner_id = str((tool_config or {}).get("runner") or tool).strip().lower()
     runner = runners.get(runner_id)
     if runner is None:
@@ -90,13 +106,16 @@ def run_tool(
             status=ToolExecutionStatus.SKIPPED,
             error=f"No adapter exists for {runner_id}",
         )
-    if runner_id == "semgrep":
-        return _run_semgrep(scan_id, repo_path, tool_config)
-    if runner_id == "checkov":
-        return _run_checkov(scan_id, repo_path, tool_config)
-    if runner_id == "sqlfluff":
-        return _run_sqlfluff(scan_id, repo_path, tool_config)
-    return runner(scan_id, repo_path)
+    try:
+        if runner_id == "semgrep":
+            return _run_semgrep(scan_id, repo_path, tool_config)
+        if runner_id == "checkov":
+            return _run_checkov(scan_id, repo_path, tool_config)
+        if runner_id == "sqlfluff":
+            return _run_sqlfluff(scan_id, repo_path, tool_config)
+        return runner(scan_id, repo_path)
+    except _IncompleteReport as exc:
+        return _incomplete(tool, str(exc), exc.findings)
 
 
 def _run_gitleaks(scan_id: int, repo_path: Path) -> ToolRunResult:
@@ -105,7 +124,7 @@ def _run_gitleaks(scan_id: int, repo_path: Path) -> ToolRunResult:
         return _skipped("gitleaks", "gitleaks binary is not installed")
 
     with tempfile.NamedTemporaryFile(suffix=".sarif") as report:
-        completed = subprocess.run(
+        completed = _scanner_process(
             [
                 executable,
                 "detect",
@@ -152,28 +171,22 @@ def _run_semgrep(
 
     command = [executable, "scan", "--json"]
     for config in configs:
-        command.extend(["--config", config])
+        command.append(f"--config={config}")
     for include in include_patterns:
-        command.extend(["--include", include])
+        command.append(f"--include={include}")
     for exclude in exclude_patterns:
-        command.extend(["--exclude", exclude])
+        command.append(f"--exclude={exclude}")
     if jobs and jobs > 0:
         command.extend(["--jobs", str(jobs)])
     if timeout and timeout > 0:
         command.extend(["--timeout", str(timeout)])
     command.append(str(repo_path))
 
-    completed = subprocess.run(
+    completed = _scanner_process(
         command,
         capture_output=True,
         text=True,
         check=False,
-        env={
-            "PATH": os.environ.get("PATH", ""),
-            "HOME": os.environ.get("HOME", ""),
-            "LANG": os.environ.get("LANG", "C.UTF-8"),
-            "SEMGREP_SEND_METRICS": "off",
-        },
         timeout=settings.tool_execution_timeout_seconds,
     )
     if completed.returncode not in {0, 1}:
@@ -192,7 +205,7 @@ def _run_bandit(scan_id: int, repo_path: Path) -> ToolRunResult:
     if executable is None:
         return _skipped("bandit", "bandit is not installed")
 
-    completed = subprocess.run(
+    completed = _scanner_process(
         [executable, "-r", str(repo_path), "-f", "json"],
         capture_output=True,
         text=True,
@@ -215,7 +228,7 @@ def _run_ruff(scan_id: int, repo_path: Path) -> ToolRunResult:
     if executable is None:
         return _skipped("ruff", "ruff is not installed")
 
-    completed = subprocess.run(
+    completed = _scanner_process(
         [executable, "check", str(repo_path), "--output-format", "json"],
         capture_output=True,
         text=True,
@@ -244,8 +257,15 @@ def _run_eslint(scan_id: int, repo_path: Path) -> ToolRunResult:
     if not files:
         return _skipped("eslint", "No JavaScript or TypeScript files were found")
 
-    completed = subprocess.run(
-        [*command, "--format", "json", "--no-error-on-unmatched-pattern", *files],
+    completed = _scanner_process(
+        [
+            *command,
+            "--format",
+            "json",
+            "--no-error-on-unmatched-pattern",
+            "--",
+            *(str((repo_path / f).resolve()) for f in files),
+        ],
         cwd=repo_path,
         capture_output=True,
         text=True,
@@ -277,13 +297,13 @@ def _run_checkov(
 
     command = [executable, "-d", str(repo_path), "-o", "json", "--quiet"]
     for check in checks:
-        command.extend(["--check", check])
+        command.append(f"--check={check}")
     for skip_check in skip_checks:
-        command.extend(["--skip-check", skip_check])
+        command.append(f"--skip-check={skip_check}")
     for framework in frameworks:
-        command.extend(["--framework", framework])
+        command.append(f"--framework={framework}")
 
-    completed = subprocess.run(
+    completed = _scanner_process(
         command,
         capture_output=True,
         text=True,
@@ -295,7 +315,7 @@ def _run_checkov(
     findings = _parse_checkov_json(completed.stdout, scan_id, repo_path)
     return ToolRunResult(
         findings=findings,
-        summary=f"checkov reported {len(findings)} findings",
+        summary=f"checkov reported {len(findings)} findings; repository config ignored",
         status=ToolExecutionStatus.COMPLETED,
         version=_tool_version([executable, "--version"]),
     )
@@ -308,7 +328,7 @@ def _run_tflint(scan_id: int, repo_path: Path) -> ToolRunResult:
     if not _matching_files(repo_path, {".tf"}) and not _matching_name_suffix(repo_path, ".tf.json"):
         return _skipped("tflint", "No Terraform files were found")
 
-    completed = subprocess.run(
+    completed = _scanner_process(
         [executable, "--recursive", "--format", "sarif"],
         cwd=repo_path,
         capture_output=True,
@@ -321,7 +341,7 @@ def _run_tflint(scan_id: int, repo_path: Path) -> ToolRunResult:
     findings = _parse_sarif_text(completed.stdout, scan_id, "tflint", "iac")
     return ToolRunResult(
         findings=findings,
-        summary=f"tflint reported {len(findings)} findings",
+        summary=f"tflint reported {len(findings)} findings; repository config ignored",
         status=ToolExecutionStatus.COMPLETED,
         version=_tool_version([executable, "--version"]),
     )
@@ -336,9 +356,16 @@ def _run_cfn_lint(scan_id: int, repo_path: Path) -> ToolRunResult:
     if not templates:
         return _skipped("cfn-lint", "No CloudFormation templates were found")
 
-    completed = subprocess.run(
-        [executable, "--format", "sarif", "--non-zero-exit-code", "none", *templates],
-        cwd=repo_path,
+    completed = _scanner_process(
+        [
+            executable,
+            "--format",
+            "sarif",
+            "--non-zero-exit-code",
+            "none",
+            "--",
+            *[str((repo_path / f).resolve()) for f in templates],
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -349,7 +376,7 @@ def _run_cfn_lint(scan_id: int, repo_path: Path) -> ToolRunResult:
     findings = _parse_sarif_text(completed.stdout, scan_id, "cfn-lint", "iac")
     return ToolRunResult(
         findings=findings,
-        summary=f"cfn-lint reported {len(findings)} findings",
+        summary=f"cfn-lint reported {len(findings)} findings; repository config ignored",
         status=ToolExecutionStatus.COMPLETED,
         version=_tool_version([executable, "--version"]),
     )
@@ -361,7 +388,7 @@ def _run_trivy(scan_id: int, repo_path: Path) -> ToolRunResult:
         return _skipped("trivy", "trivy is not installed")
 
     with tempfile.NamedTemporaryFile(suffix=".sarif") as report:
-        completed = subprocess.run(
+        completed = _scanner_process(
             [
                 executable,
                 "fs",
@@ -410,15 +437,23 @@ def _run_sqlfluff(
 
     findings: list[Finding] = []
     for dialect, files in dialect_to_files.items():
-        command = [executable, "lint", "--format", "json", "--dialect", dialect]
+        command = [
+            executable,
+            "lint",
+            "--ignore-local-config",
+            "--library-path",
+            "none",
+            "--format",
+            "json",
+            f"--dialect={dialect}",
+        ]
         if include_rules:
-            command.extend(["--rules", ",".join(include_rules)])
+            command.append(f"--rules={','.join(include_rules)}")
         if exclude_rules:
-            command.extend(["--exclude-rules", ",".join(exclude_rules)])
-        command.extend(files)
-        completed = subprocess.run(
+            command.append(f"--exclude-rules={','.join(exclude_rules)}")
+        command.extend(["--", *(str((repo_path / f).resolve()) for f in files)])
+        completed = _scanner_process(
             command,
-            cwd=repo_path,
             capture_output=True,
             text=True,
             check=False,
@@ -426,31 +461,53 @@ def _run_sqlfluff(
         )
         if completed.returncode not in {0, 1, 65}:
             if dialect == "oracle":
-                fallback = subprocess.run(
+                fallback = _scanner_process(
                     [
                         executable,
                         "lint",
+                        "--ignore-local-config",
+                        "--library-path",
+                        "none",
                         "--format",
                         "json",
                         "--dialect",
                         "ansi",
-                        *files,
+                        "--",
+                        *(str((repo_path / f).resolve()) for f in files),
                     ],
-                    cwd=repo_path,
                     capture_output=True,
                     text=True,
                     check=False,
                     timeout=settings.tool_execution_timeout_seconds,
                 )
                 if fallback.returncode in {0, 1, 65}:
-                    findings.extend(_parse_sqlfluff_json(fallback.stdout, scan_id, dialect="ansi"))
+                    try:
+                        findings.extend(
+                            _parse_sqlfluff_json(
+                                fallback.stdout, scan_id, dialect="ansi", repo_path=repo_path
+                            )
+                        )
+                    except _IncompleteReport as exc:
+                        raise _IncompleteReport(str(exc), findings + exc.findings) from exc
                     continue
-            return _failed("sqlfluff", completed)
-        findings.extend(_parse_sqlfluff_json(completed.stdout, scan_id, dialect=dialect))
+            failed = _failed("sqlfluff", completed)
+            failed.findings = findings
+            return failed
+        try:
+            findings.extend(
+                _parse_sqlfluff_json(
+                    completed.stdout, scan_id, dialect=dialect, repo_path=repo_path
+                )
+            )
+        except _IncompleteReport as exc:
+            raise _IncompleteReport(str(exc), findings + exc.findings) from exc
 
     return ToolRunResult(
         findings=findings,
-        summary=f"sqlfluff reported {len(findings)} findings across {total_files} files",
+        summary=(
+            f"sqlfluff reported {len(findings)} findings across {total_files} files; "
+            "repository config ignored"
+        ),
         status=ToolExecutionStatus.COMPLETED,
         version=_tool_version([executable, "--version"]),
     )
@@ -463,7 +520,7 @@ def _run_swiftlint(scan_id: int, repo_path: Path) -> ToolRunResult:
     if not _matching_files(repo_path, {".swift"}):
         return _skipped("swiftlint", "No Swift files were found")
 
-    completed = subprocess.run(
+    completed = _scanner_process(
         [executable, "lint", "--quiet", "--reporter", "json", "--path", str(repo_path)],
         capture_output=True,
         text=True,
@@ -489,7 +546,7 @@ def _run_detekt(scan_id: int, repo_path: Path) -> ToolRunResult:
         return _skipped("detekt", "No Kotlin files were found")
 
     with tempfile.NamedTemporaryFile(suffix=".sarif") as report:
-        completed = subprocess.run(
+        completed = _scanner_process(
             [
                 executable,
                 "--input",
@@ -525,7 +582,7 @@ def _run_android_lint(scan_id: int, repo_path: Path) -> ToolRunResult:
     if gradlew is None:
         return _skipped("android-lint", "Gradle wrapper is not available for Android lint")
 
-    completed = subprocess.run(
+    completed = _scanner_process(
         [str(gradlew), "lint"],
         cwd=repo_path,
         capture_output=True,
@@ -535,15 +592,12 @@ def _run_android_lint(scan_id: int, repo_path: Path) -> ToolRunResult:
     )
     report_path = next(repo_path.rglob("lint-results*.xml"), None)
     if report_path is None:
-        if completed.returncode == 0:
-            return ToolRunResult(
-                findings=[],
-                summary="android lint completed without a report",
-                status=ToolExecutionStatus.COMPLETED,
-                version=None,
-            )
-        return _failed("android-lint", completed)
+        return _incomplete("android-lint", "android lint did not produce an XML report", [])
     findings = _parse_android_lint_xml(report_path, scan_id, repo_path)
+    if completed.returncode != 0:
+        return _incomplete(
+            "android-lint", "android lint failed; report may be incomplete", findings
+        )
     return ToolRunResult(
         findings=findings,
         summary=f"android lint reported {len(findings)} findings",
@@ -569,7 +623,7 @@ def _run_dotnet_analyzers(scan_id: int, repo_path: Path) -> ToolRunResult:
         )
 
     with tempfile.NamedTemporaryFile(suffix=".sarif") as report:
-        completed = subprocess.run(
+        completed = _scanner_process(
             [
                 executable,
                 "build",
@@ -582,8 +636,17 @@ def _run_dotnet_analyzers(scan_id: int, repo_path: Path) -> ToolRunResult:
             check=False,
             timeout=settings.tool_execution_timeout_seconds,
         )
-        if completed.returncode not in {0, 1}:
-            return _failed("dotnet-analyzers", completed)
+        if completed.returncode != 0:
+            findings = []
+            try:
+                findings = _parse_sarif(Path(report.name), scan_id, "dotnet-analyzers", "quality")
+            except _IncompleteReport as exc:
+                findings = exc.findings
+            except ValueError, OSError:
+                pass
+            result = _failed("dotnet-analyzers", completed)
+            result.findings = findings
+            return result
         findings = _parse_sarif(Path(report.name), scan_id, "dotnet-analyzers", "quality")
         return ToolRunResult(
             findings=findings,
@@ -599,7 +662,7 @@ def _run_grype(scan_id: int, repo_path: Path) -> ToolRunResult:
         return _skipped("grype", "grype is not installed")
 
     with tempfile.NamedTemporaryFile(suffix=".sarif") as report:
-        completed = subprocess.run(
+        completed = _scanner_process(
             [
                 executable,
                 f"dir:{repo_path}",
@@ -628,7 +691,7 @@ def _parse_sarif(
     report_path: Path, scan_id: int, tool: str, default_category: str
 ) -> list[Finding]:
     if not report_path.exists() or report_path.stat().st_size == 0:
-        return []
+        raise ValueError(f"{tool} did not produce a SARIF report")
     payload = json.loads(report_path.read_text(encoding="utf-8"))
     return _parse_sarif_payload(payload, scan_id, tool, default_category)
 
@@ -637,7 +700,7 @@ def _parse_sarif_text(
     payload_text: str, scan_id: int, tool: str, default_category: str
 ) -> list[Finding]:
     if not payload_text.strip():
-        return []
+        raise ValueError(f"{tool} did not produce a SARIF report")
     payload = json.loads(payload_text)
     return _parse_sarif_payload(payload, scan_id, tool, default_category)
 
@@ -645,6 +708,77 @@ def _parse_sarif_text(
 def _parse_sarif_payload(
     payload: dict[str, Any], scan_id: int, tool: str, default_category: str
 ) -> list[Finding]:
+    if not isinstance(payload, dict) or payload.get("version") != "2.1.0":
+        raise ValueError(f"{tool} produced invalid SARIF metadata")
+    runs = payload.get("runs")
+    if not isinstance(runs, list) or not runs:
+        raise ValueError(f"{tool} produced SARIF without runs")
+    for run in runs:
+        if not isinstance(run, dict) or not isinstance(run.get("tool"), dict):
+            raise ValueError(f"{tool} produced an invalid SARIF run")
+        driver = run["tool"].get("driver")
+        if not isinstance(driver, dict) or not isinstance(driver.get("name"), str):
+            raise ValueError(f"{tool} produced SARIF without a driver")
+        if not isinstance(run.get("results"), list):
+            raise ValueError(f"{tool} produced SARIF without results")
+        invocations = run.get("invocations", [])
+        rules = driver.get("rules", [])
+        if not isinstance(invocations, list) or any(not isinstance(i, dict) for i in invocations):
+            raise ValueError(f"{tool} produced invalid SARIF invocations")
+        if not isinstance(rules, list) or any(
+            not isinstance(r, dict) or not isinstance(r.get("id"), str) for r in rules
+        ):
+            raise ValueError(f"{tool} produced invalid SARIF rules")
+        for rule in rules:
+            for key in ("shortDescription", "fullDescription", "properties"):
+                if key in rule and not isinstance(rule[key], dict):
+                    raise ValueError(f"{tool} produced an invalid SARIF rule")
+            for key in ("shortDescription", "fullDescription"):
+                description = rule.get(key, {})
+                if "text" in description and not isinstance(description["text"], str):
+                    raise ValueError(f"{tool} produced an invalid SARIF rule description")
+            tags = rule.get("properties", {}).get("tags", [])
+            if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+                raise ValueError(f"{tool} produced invalid SARIF rule tags")
+        for result in run["results"]:
+            if not isinstance(result, dict):
+                raise ValueError(f"{tool} produced an invalid SARIF result")
+            for key in ("message", "properties"):
+                if key in result and not isinstance(result[key], dict):
+                    raise ValueError(f"{tool} produced an invalid SARIF result {key}")
+            message = result.get("message")
+            if not isinstance(message, dict) or not any(
+                isinstance(message.get(key), str) and message[key] for key in ("text", "id")
+            ):
+                raise ValueError(f"{tool} produced SARIF without a result message")
+            if any(key in message and not isinstance(message[key], str) for key in ("text", "id")):
+                raise ValueError(f"{tool} produced an invalid SARIF message")
+            if "ruleId" in result and not isinstance(result["ruleId"], str):
+                raise ValueError(f"{tool} produced an invalid SARIF rule id")
+            locations = result.get("locations", [])
+            if not isinstance(locations, list):
+                raise ValueError(f"{tool} produced invalid SARIF locations")
+            for location in locations:
+                if not isinstance(location, dict) or not isinstance(
+                    location.get("physicalLocation", {}), dict
+                ):
+                    raise ValueError(f"{tool} produced an invalid SARIF location")
+                physical = location.get("physicalLocation", {})
+                if any(
+                    not isinstance(physical.get(k, {}), dict)
+                    for k in ("region", "artifactLocation")
+                ):
+                    raise ValueError(f"{tool} produced an invalid SARIF physical location")
+                region = physical.get("region", {})
+                if any(
+                    key in region
+                    and (not isinstance(region[key], int) or isinstance(region[key], bool))
+                    for key in ("startLine", "startColumn")
+                ):
+                    raise ValueError(f"{tool} produced an invalid SARIF region")
+                uri = physical.get("artifactLocation", {}).get("uri")
+                if uri is not None and not isinstance(uri, str):
+                    raise ValueError(f"{tool} produced an invalid SARIF artifact URI")
     findings: list[Finding] = []
     for run in payload.get("runs", []):
         rules = {
@@ -695,13 +829,21 @@ def _parse_sarif_payload(
                     tool_metadata=result.get("properties"),
                 )
             )
+    if any(
+        invocation.get("executionSuccessful") is False
+        for run in runs
+        for invocation in run.get("invocations", [])
+    ):
+        raise _IncompleteReport(f"{tool} reported an unsuccessful SARIF invocation", findings)
     return findings
 
 
 def _parse_ruff_json(payload_text: str, scan_id: int) -> list[Finding]:
     if not payload_text.strip():
-        return []
+        raise ValueError("ruff did not produce a JSON report")
     payload = json.loads(payload_text)
+    if not isinstance(payload, list) or any(not isinstance(item, dict) for item in payload):
+        raise ValueError("ruff produced an invalid JSON report")
     findings: list[Finding] = []
     for item in payload:
         code = item.get("code")
@@ -732,8 +874,14 @@ def _parse_ruff_json(payload_text: str, scan_id: int) -> list[Finding]:
 
 def _parse_bandit_json(payload_text: str, scan_id: int, repo_path: Path) -> list[Finding]:
     if not payload_text.strip():
-        return []
+        raise ValueError("bandit did not produce a JSON report")
     payload = json.loads(payload_text)
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("results"), list)
+        or payload.get("errors")
+    ):
+        raise ValueError("bandit produced an invalid or incomplete report")
     findings: list[Finding] = []
     for item in payload.get("results", []):
         relative_path = _relative_path(repo_path, Path(item.get("filename", "")))
@@ -775,8 +923,14 @@ def _parse_bandit_json(payload_text: str, scan_id: int, repo_path: Path) -> list
 
 def _parse_semgrep_json(payload_text: str, scan_id: int, repo_path: Path) -> list[Finding]:
     if not payload_text.strip():
-        return []
+        raise ValueError("semgrep did not produce a JSON report")
     payload = json.loads(payload_text)
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("results"), list)
+        or payload.get("errors")
+    ):
+        raise ValueError("semgrep produced an invalid or incomplete report")
     findings: list[Finding] = []
     for item in payload.get("results", []):
         extra = item.get("extra", {})
@@ -818,10 +972,26 @@ def _parse_semgrep_json(payload_text: str, scan_id: int, repo_path: Path) -> lis
 
 def _parse_eslint_json(payload_text: str, scan_id: int, repo_path: Path) -> list[Finding]:
     if not payload_text.strip():
-        return []
+        raise ValueError("eslint did not produce a JSON report")
     payload = json.loads(payload_text)
+    if not isinstance(payload, list):
+        raise ValueError("eslint produced an invalid JSON report")
     findings: list[Finding] = []
+    incomplete = False
     for file_report in payload:
+        if (
+            not isinstance(file_report, dict)
+            or not isinstance(file_report.get("filePath"), str)
+            or not isinstance(file_report.get("messages"), list)
+            or any(
+                not isinstance(m, dict) or not isinstance(m.get("message"), str)
+                for m in file_report["messages"]
+            )
+        ):
+            raise ValueError("eslint produced an invalid file report")
+        incomplete |= bool(file_report.get("fatalErrorCount")) or any(
+            m.get("fatal") is True for m in file_report["messages"]
+        )
         absolute_path = Path(file_report.get("filePath", ""))
         relative_path = _relative_path(repo_path, absolute_path)
         for message in file_report.get("messages", []):
@@ -853,19 +1023,40 @@ def _parse_eslint_json(payload_text: str, scan_id: int, repo_path: Path) -> list
                     ),
                 )
             )
+    if incomplete:
+        raise _IncompleteReport(
+            "eslint reported fatal parsing errors; analysis incomplete", findings
+        )
     return findings
 
 
 def _parse_checkov_json(payload_text: str, scan_id: int, repo_path: Path) -> list[Finding]:
     if not payload_text.strip():
-        return []
+        raise ValueError("checkov did not produce a JSON report")
 
     findings: list[Finding] = []
+    incomplete = False
     for payload in _parse_json_documents(payload_text):
         documents = payload if isinstance(payload, list) else [payload]
+        if not documents:
+            raise ValueError("checkov produced an empty JSON report")
         for document in documents:
-            if not isinstance(document, dict):
-                continue
+            if not isinstance(document, dict) or not isinstance(document.get("results"), dict):
+                raise ValueError("checkov produced an invalid report")
+            results = document["results"]
+            if not isinstance(results.get("failed_checks"), list) or any(
+                not isinstance(i, dict) for i in results["failed_checks"]
+            ):
+                raise ValueError("checkov produced invalid failed checks")
+            if any(
+                not isinstance(i.get("check_id"), str) or not isinstance(i.get("check_name"), str)
+                for i in results["failed_checks"]
+            ):
+                raise ValueError("checkov produced an invalid failed check")
+            summary = document.get("summary", {})
+            if not isinstance(summary, dict):
+                raise ValueError("checkov produced an invalid summary")
+            incomplete |= bool(summary.get("parsing_errors")) or bool(results.get("parsing_errors"))
             check_type = str(document.get("check_type", "iac")).lower()
             results = document.get("results", {})
             for item in results.get("failed_checks", []):
@@ -901,16 +1092,36 @@ def _parse_checkov_json(payload_text: str, scan_id: int, repo_path: Path) -> lis
                         },
                     )
                 )
+    if incomplete:
+        raise _IncompleteReport("checkov reported parsing errors; analysis incomplete", findings)
     return findings
 
 
-def _parse_sqlfluff_json(payload_text: str, scan_id: int, *, dialect: str) -> list[Finding]:
+def _parse_sqlfluff_json(
+    payload_text: str, scan_id: int, *, dialect: str, repo_path: Path | None = None
+) -> list[Finding]:
     if not payload_text.strip():
-        return []
+        raise ValueError("sqlfluff did not produce a JSON report")
     payload = json.loads(payload_text)
+    if not isinstance(payload, list):
+        raise ValueError("sqlfluff produced an invalid JSON report")
     findings: list[Finding] = []
+    incomplete = False
     for file_report in payload:
+        if (
+            not isinstance(file_report, dict)
+            or not isinstance(file_report.get("filepath"), str)
+            or not isinstance(file_report.get("violations"), list)
+            or any(
+                not isinstance(v, dict) or not isinstance(v.get("description"), str)
+                for v in file_report["violations"]
+            )
+        ):
+            raise ValueError("sqlfluff produced an invalid file report")
+        incomplete |= any(v.get("code") in {"PRS", "TMP", "LXR"} for v in file_report["violations"])
         relative_path = file_report.get("filepath")
+        if relative_path and repo_path and Path(relative_path).is_absolute():
+            relative_path = _relative_path(repo_path, Path(relative_path))
         for violation in file_report.get("violations", []):
             code = violation.get("code")
             message = violation.get("description", code or "SQLFluff finding")
@@ -938,21 +1149,33 @@ def _parse_sqlfluff_json(payload_text: str, scan_id: int, *, dialect: str) -> li
                     tool_metadata={"dialect": dialect},
                 )
             )
+    if incomplete:
+        raise _IncompleteReport(
+            "sqlfluff reported parsing, templating or lexing errors; analysis incomplete", findings
+        )
     return findings
 
 
 def _parse_swiftlint_json(payload_text: str, scan_id: int, repo_path: Path) -> list[Finding]:
     if not payload_text.strip():
-        return []
+        raise ValueError("swiftlint did not produce a JSON report")
     payload = json.loads(payload_text)
+    if not isinstance(payload, list):
+        raise ValueError("swiftlint produced an invalid JSON report")
     findings: list[Finding] = []
     for item in payload:
-        relative_path = _relative_path(repo_path, Path(item.get("file")))
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("file"), str)
+            or not isinstance(item.get("reason"), str)
+        ):
+            raise ValueError("swiftlint produced an invalid finding")
+        relative_path = _relative_path(repo_path, Path(item["file"]))
         severity = (
             FindingSeverity.MEDIUM if item.get("severity") == "error" else FindingSeverity.LOW
         )
         rule_id = item.get("rule_id")
-        message = item.get("reason", rule_id or "SwiftLint finding")
+        message = item["reason"]
         findings.append(
             Finding(
                 scan_id=scan_id,
@@ -982,13 +1205,21 @@ def _parse_swiftlint_json(payload_text: str, scan_id: int, repo_path: Path) -> l
 def _parse_android_lint_xml(report_path: Path, scan_id: int, repo_path: Path) -> list[Finding]:
     findings: list[Finding] = []
     root = ElementTree.parse(report_path).getroot()
+    if root.tag != "issues" or any(child.tag != "issue" for child in root):
+        raise ValueError("android lint produced an invalid XML report")
     for issue in root.findall("issue"):
+        if (
+            not issue.get("id")
+            or not issue.get("message")
+            or any(child.tag != "location" for child in issue)
+        ):
+            raise ValueError("android lint produced an invalid issue")
         location = issue.find("location")
         file_path = location.get("file") if location is not None else None
-        line = int(location.get("line")) if location is not None and location.get("line") else None
-        column = (
-            int(location.get("column")) if location is not None and location.get("column") else None
-        )
+        line_text = location.get("line") if location is not None else None
+        column_text = location.get("column") if location is not None else None
+        line = int(line_text) if line_text else None
+        column = int(column_text) if column_text else None
         relative_path = _relative_path(repo_path, Path(file_path)) if file_path else None
         rule_id = issue.get("id")
         message = issue.get("message", rule_id or "Android lint finding")
@@ -1009,6 +1240,8 @@ def _parse_android_lint_xml(report_path: Path, scan_id: int, repo_path: Path) ->
                 fingerprint=_fingerprint("android-lint", relative_path, line, rule_id, message),
             )
         )
+    if any(issue.get("id") in {"LintError", "LintErrorReported"} for issue in root):
+        raise _IncompleteReport("android lint reported an analysis error", findings)
     return findings
 
 
@@ -1089,9 +1322,73 @@ def _failed(tool: str, completed: subprocess.CompletedProcess[str]) -> ToolRunRe
     )
 
 
+def _safe_repository_file(repo_path: Path, file_path: Path) -> bool:
+    try:
+        return (
+            ".git" not in file_path.relative_to(repo_path).parts
+            and file_path.is_file()
+            and file_path.resolve().is_relative_to(repo_path.resolve())
+        )
+    except OSError, ValueError, RuntimeError:
+        return False
+
+
+def _scanner_process(
+    command: list[str],
+    *,
+    cwd: Path | None = None,
+    capture_output: bool,
+    text: bool,
+    check: bool,
+    timeout: int,
+) -> subprocess.CompletedProcess[str]:
+    """Run a scanner with a private home and an explicit, credential-free environment."""
+    tool = Path(command[0]).name
+    with tempfile.TemporaryDirectory(prefix="vigilweave-scanner-") as work:
+        work_path = Path(work)
+        env = {
+            "PATH": os.pathsep.join(
+                p for p in os.environ.get("PATH", os.defpath).split(os.pathsep) if os.path.isabs(p)
+            ),
+            "HOME": work,
+            "XDG_CONFIG_HOME": str(work_path / "config"),
+            "XDG_CACHE_HOME": str(work_path / "cache"),
+            "LANG": "C.UTF-8",
+            "SEMGREP_SEND_METRICS": "off",
+        }
+        command = list(command)
+        is_probe = "--version" in command or command[1:] == ["version"]
+        if tool == "tflint":
+            plugin_dir = work_path / "plugins"
+            plugin_dir.mkdir()
+            env["TFLINT_PLUGIN_DIR"] = str(plugin_dir)
+        if not is_probe and tool == "tflint":
+            config = work_path / "tflint.hcl"
+            config.write_text("", encoding="utf-8")
+            command.extend(["--config", str(config), "--chdir", str(Path(cwd or ".").resolve())])
+            cwd = None
+        elif not is_probe and tool == "swiftlint":
+            config = work_path / "swiftlint.yml"
+            config.write_text("{}\n", encoding="utf-8")
+            command.extend(["--config", str(config)])
+        elif not is_probe and tool == "checkov":
+            config = work_path / "checkov.yaml"
+            config.write_text("{}\n", encoding="utf-8")
+            command.extend(["--config-file", str(config)])
+        return subprocess.run(
+            command,
+            cwd=cwd or work,
+            env=env,
+            capture_output=capture_output,
+            text=text,
+            check=check,
+            timeout=timeout,
+        )
+
+
 def _tool_version(command: list[str]) -> str | None:
     try:
-        completed = subprocess.run(
+        completed = _scanner_process(
             command,
             capture_output=True,
             text=True,
@@ -1143,7 +1440,7 @@ def _relative_path(repo_path: Path, file_path: Path) -> str:
 def _matching_files(repo_path: Path, suffixes: set[str]) -> list[str]:
     matches: list[str] = []
     for file_path in repo_path.rglob("*"):
-        if not file_path.is_file() or ".git" in file_path.parts:
+        if not _safe_repository_file(repo_path, file_path):
             continue
         if file_path.suffix.lower() in suffixes:
             matches.append(str(file_path.relative_to(repo_path)))
@@ -1153,7 +1450,7 @@ def _matching_files(repo_path: Path, suffixes: set[str]) -> list[str]:
 def _matching_name_suffix(repo_path: Path, file_name_suffix: str) -> list[str]:
     matches: list[str] = []
     for file_path in repo_path.rglob("*"):
-        if not file_path.is_file() or ".git" in file_path.parts:
+        if not _safe_repository_file(repo_path, file_path):
             continue
         if file_path.name.lower().endswith(file_name_suffix):
             matches.append(str(file_path.relative_to(repo_path)))
@@ -1166,7 +1463,7 @@ def _sqlfluff_file_groups(repo_path: Path) -> dict[str, list[str]]:
     plsql_suffixes = {".pls", ".pks", ".pkb", ".prc", ".fnc", ".trg", ".tpb", ".tps", ".sqlj"}
 
     for file_path in repo_path.rglob("*"):
-        if not file_path.is_file() or ".git" in file_path.parts:
+        if not _safe_repository_file(repo_path, file_path):
             continue
         suffix = file_path.suffix.lower()
         relative_path = str(file_path.relative_to(repo_path))
@@ -1185,7 +1482,7 @@ def _sqlfluff_file_groups(repo_path: Path) -> dict[str, list[str]]:
 def _matching_cloudformation_templates(repo_path: Path) -> list[str]:
     matches: list[str] = []
     for file_path in repo_path.rglob("*"):
-        if not file_path.is_file() or ".git" in file_path.parts:
+        if not _safe_repository_file(repo_path, file_path):
             continue
         name = file_path.name.lower()
         suffix = file_path.suffix.lower()

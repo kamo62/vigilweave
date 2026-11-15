@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import secrets
 from functools import lru_cache
 from urllib.parse import urlparse
 
@@ -19,6 +20,17 @@ class SessionCookieError(ValueError):
 
 
 WorkOSCookieError = SessionCookieError
+
+_DEV_SECRET = secrets.token_urlsafe(32)
+_COOKIE_TTLS = {
+    "state": 300,
+    "next": 300,
+    "invite": 300,
+    "github-app-install": 600,
+    "local_session": 86400,
+    "session": 86400,
+    "refresh": 7 * 86400,
+}
 
 
 def workos_auth_configured() -> bool:
@@ -53,7 +65,7 @@ def _session_secret() -> str:
     secret = (settings.session_secret or settings.workos_session_secret or "").strip()
     if not secret:
         if settings.environment in {"development", "test"}:
-            return "vigilweave-dev-session-secret"
+            return _DEV_SECRET
         raise SessionCookieError("Session secret is not configured")
     return secret
 
@@ -78,7 +90,10 @@ def decode_workos_cookie(purpose: str, value: str | None) -> str | None:
         return None
 
     try:
-        payload = _build_cipher(_session_secret()).decrypt(value.encode("utf-8"))
+        ttl = _COOKIE_TTLS.get(purpose)
+        if ttl is None:
+            raise SessionCookieError(f"Unknown cookie purpose: {purpose}")
+        payload = _build_cipher(_session_secret()).decrypt(value.encode("utf-8"), ttl=ttl)
     except InvalidToken as exc:
         raise SessionCookieError(f"Invalid {purpose} cookie") from exc
 
@@ -87,7 +102,7 @@ def decode_workos_cookie(purpose: str, value: str | None) -> str | None:
     except json.JSONDecodeError as exc:
         raise SessionCookieError(f"Malformed {purpose} cookie payload") from exc
 
-    if decoded.get("purpose") != purpose:
+    if not isinstance(decoded, dict) or decoded.get("purpose") != purpose:
         raise SessionCookieError(f"Unexpected cookie purpose for {purpose}")
 
     raw_value = decoded.get("value")

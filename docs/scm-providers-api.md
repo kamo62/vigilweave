@@ -2,6 +2,9 @@
 
 Research date: 2026-11-14. Source baseline: working tree based on `093de62`, including the concurrent SCM credential-binding changes reviewed for this document. This is a source and official-documentation reference, not evidence of a running deployment or successful access to a vendor account. All examples are synthetic.
 
+Transport and webhook sections updated from the current working tree on 2026-11-15.
+Synthetic Git and webhook contract checks were run; no live provider credentials were used.
+
 ## Scope and evidence
 
 The labels IMPLEMENTED, PROVIDER CAPABILITY and KNOWN GAP distinguish application behaviour from vendor features. A vendor accepting a credential type does not establish that VigilWeave implements its onboarding, renewal or every endpoint needed for discovery.
@@ -56,7 +59,7 @@ Public responses expose `token_masked`, not ciphertext or plaintext token: `****
 
 At runtime, the worker resolves the connection ID recorded in scan metadata, verifies that the connection exists, is active and belongs to the scan tenant, validates the clone destination with an empty credential, then decrypts the current token. Rotation affects queued scans when they execute. A missing, foreign-tenant or inactive connection fails the scan instead of silently retrying anonymously. `is_active` is enforced by clone resolution; the test, discovery and dedicated import routes do not currently reject inactive connections.
 
-Credentials are percent-encoded into an HTTPS URL passed to the Git subprocess. This is transient runtime plaintext, including process arguments and the temporary checkout's Git configuration; database encryption is not end-to-end secret isolation. Error/log helpers provide best-effort redaction. Do not print the authenticated URL or place it in user-supplied repository inventory. Source: [clone resolution](../app/services/scm_clone.py), [Git invocation](../app/services/git_utils.py), [scan failure handling](../app/services/scanner.py).
+The provider resolver constructs an authenticated HTTPS URL internally. The Git boundary strips its userinfo and passes a transient Basic header through repository-scoped `GIT_CONFIG_*` environment entries. Git arguments and the saved remote URL omit credentials; system/global Git configuration, credential helpers, prompts, hooks and redirects are disabled. Clones materialise symlinks as plain files. Error/log helpers provide best-effort redaction. The Git process still receives plaintext credentials in its environment, so this does not isolate credentials from the worker user or privileged host processes. Do not print the authenticated URL or place it in repository inventory. Source: [clone resolution](../app/services/scm_clone.py), [Git invocation](../app/services/git_utils.py), [scan failure handling](../app/services/scanner.py).
 
 ### IMPLEMENTED destination checks and deployment limits
 
@@ -73,7 +76,7 @@ Connection create/update trims surrounding whitespace and trailing slashes, requ
 
 Authenticated clone validation requires the expected HTTPS hostname and effective port, rejects queries/fragments and existing passwords, and checks repeatedly decoded paths for `.`/`..` segments and backslashes. A provider-returned username-only URL is parsed and its username replaced. GitHub Cloud maps API host `api.github.com` to clone host `github.com`; Bitbucket maps `api.bitbucket.org` to `bitbucket.org`. Other bases use their configured origin. GitLab also enforces its configured deployment path prefix; Azure enforces the base path plus configured organisation.
 
-These checks bind credentials to an origin/deployment scope. They do not prove repository ownership, repository-level permission or membership of a provider discovery result. Provider HTTP calls do not explicitly enable redirects; there is no application redirect traversal policy. Git subprocess redirects and network/DNS enforcement require separate assessment.
+These checks bind credentials to an origin/deployment scope. They do not prove repository ownership, repository-level permission or membership of a provider discovery result. Provider HTTP calls do not explicitly enable redirects; Git HTTP redirects are disabled. Network/DNS enforcement still requires separate assessment.
 
 ## Application API contract
 
@@ -336,7 +339,11 @@ Synthetic native scan body:
 
 The resulting scan records the IDs under `scan_metadata.scm_connection_id` or `scan_metadata.github.installation_id`; the token is resolved later. HTTP `201` means a scan record was created, not that cloning succeeded. Execution can be eager or queued according to configuration; check scan status and redacted error metadata separately.
 
-GitHub pull-request webhook routing uses exact repository inventory mapping and rejects ambiguous links across projects. Accepted actions are `opened`, `reopened`, `synchronize` and `ready_for_review`; the handler records App context and the linked SCM connection ID when present. This is separate from native explicit-project lookup. Provider connection testing does not establish that webhook delivery, routing or check publication works.
+GitHub pull-request webhook routing first resolves the installation's stored tenant, then matches the exact repository URL and installation ID within that tenant. Missing installation links and ambiguous project links are rejected. Accepted actions are `opened`, `reopened`, `synchronize` and `ready_for_review`; the handler records App context and the linked SCM connection ID when present. This is separate from native explicit-project lookup. Provider connection testing does not establish that webhook delivery, routing or check publication works.
+
+Scan and IDE request branches must be valid Git branch names; `refs/heads/` is accepted. Explicit scan commits must contain 7–64 hexadecimal characters. Revision expressions such as `HEAD~1`, option-like refs and malformed names are rejected. Clone/history operations validate refs again. See [ref validation](../app/core/git_refs.py).
+
+Azure `git.pullrequest.created` and `git.pullrequest.updated` webhooks currently return `503` before claiming delivery. The deployment-wide webhook secret does not identify a tenant or subscription. Restoring these events requires a stored tenant-owned subscription/credential binding; a URL or tenant supplied in the event body is insufficient. Other Azure events remain ignored. This restriction does not disable the Azure pipeline task, SCM discovery or explicitly assigned native scans.
 
 `POST /api/v1/webhooks/github` uses the configured webhook secret and `X-Hub-Signature-256` rather than an admin principal. It also reads `X-GitHub-Event` and `X-GitHub-Delivery`, applies webhook rate/body limits and records delivery results. The success shape has `accepted`, `event`, nullable `action`, `message`, nullable `scan_id` and `check_run_id`. A missing secret returns `503`, invalid signature `401`, and rejected handler outcome `400`; an already-processing delivery can return `409`. An accepted ignored event does not imply that a scan was created. Source: [webhook route](../app/api/webhooks.py).
 

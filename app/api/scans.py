@@ -39,12 +39,12 @@ from app.models import (
     ToolExecutionPublic,
 )
 from app.models.project import Project
+from app.services.config_loader import get_effective_tool_config, validate_tool_selection
 from app.services.policy_engine import write_audit_event
 from app.services.project_mapping import get_project_repo_link
 from app.services.report_generator import generate_scan_report_pdf
 from app.services.sarif_export import export_scan_to_sarif
-from app.services.scanner import execute_scan
-from app.tasks.scan_tasks import run_scan
+from app.services.scan_lifecycle import dispatch_scan
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -216,7 +216,20 @@ def create_scan(
     session: Session = Depends(get_session),
     principal=Depends(require_scope("scan:write")),
 ) -> ScanPublic:
-    """Create and queue a scan."""
+    """Create a scan and dispatch it.
+
+    Eager execution can return a completed or failed scan. An enqueue failure returns
+    the created scan in failed state, with a diagnostic in scan_metadata.
+    """
+
+    try:
+        validate_tool_selection(
+            payload.scan_type,
+            payload.tools,
+            get_effective_tool_config(session, principal.tenant_slug),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     if not is_safe_repo_url(payload.repo):
         raise HTTPException(
@@ -262,10 +275,8 @@ def create_scan(
     )
     session.commit()
     session.refresh(scan)
-    if settings.celery_task_always_eager:
-        execute_scan(session, scan.id)
-    else:
-        run_scan.delay(scan.id)
+    assert scan.id is not None
+    dispatch_scan(session, scan.id)
     session.refresh(scan)
     return _scan_to_public(session, scan)
 

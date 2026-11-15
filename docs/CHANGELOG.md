@@ -4,6 +4,61 @@ Implementation updates for VigilWeave. For setup, see [README.md](../README.md).
 
 ---
 
+## 2026-11-15: 4.0.0, scan and session reliability
+
+- Enforce browser cookie lifetimes and bind local and WorkOS sessions to a per-user
+  generation. Logout and account security changes revoke existing browser sessions.
+  Refresh-only requests require CSRF validation. Add a forward session-generation migration;
+  existing browser sessions require a one-time sign-in. Replace the public development
+  fallback secret with a per-process random value when no secret is configured.
+- Centralise scanner launches and version probes behind a minimal environment and private
+  temporary HOME. Disable repository configuration for affected tools and isolate TFLint's
+  plugin directory. Temporary caches may reduce offline functionality. This is not OS isolation.
+- Remove credentials from Git arguments and saved remotes, disable redirects and hooks, and
+  check out symlinks as plain files. Validate branch names and hexadecimal commit IDs at
+  scan/IDE boundaries and again before Git operations. Route GitHub events through the
+  tenant's installation and repository link. Azure pull-request hooks return 503 pending
+  tenant-owned subscription credentials; the shared deployment secret cannot establish ownership.
+- Keep policy metadata consistent with the fail-closed gate, including coverage failures and
+  deployment-default thresholds. Retain partial findings from failed analysers and apply
+  best-effort redaction to finding text and known sensitive metadata fields at aggregation.
+- Fail gates when selected analysers skip or no analyser completes; validate custom analyser
+  IDs at the scan and IDE boundaries. The dashboard displays coverage and policy reasons
+  and execution diagnostics. This deliberately makes previously passing incomplete scans fail.
+- Reject missing or malformed SARIF and invalid or error-bearing Bandit and Semgrep reports,
+  and invalid Ruff, Checkov, ESLint, SQLFluff, SwiftLint and Android reports. Declared analysis
+  failures and failed Android/.NET builds cannot complete successfully; supported partial
+  reports retain findings. Android report freshness and complete module coverage remain open.
+- Measure complexity per Lizard function, skip symlinked and oversized quality inputs, and
+  report unmeasured scan-level duplication as unknown. Debt remains an estimate.
+- Assign repository-relative versioned finding identities before deduplication. Keep hashed
+  original fingerprints and legacy waiver aliases; native alias matching requires an exact
+  rule constraint. Preserve file-wide complexity and existing maintainability waivers.
+  Carry acknowledged/false-positive/wont-fix triage within the same tenant, assigned project,
+  repository and branch; reappearing fixed findings reopen. Historical scans are not rewritten.
+- Treat SQLite's timezone-naive stored waiver expiry as UTC during comparison. Existing data
+  written with non-UTC offsets still needs review.
+- Add private scan claim tokens and heartbeats through a forward migration. Reject duplicate
+  execution, recover interrupted scans conditionally and prevent lost workers from writing
+  results. Commit findings/metrics/waivers/completion together while retaining tool diagnostics
+  on finalisation failure. Dispatch failures produce a failed scan record; terminal SCM updates
+  follow the database commit. Recovery and bounded queued resubmission run in the API background.
+- Preserve application loggers when Alembic runs inside the application process.
+
+## 2026-11-14: Core-only source packaging
+
+- Added a source-only application ZIP with the backend, frontend, migrations and build inputs.
+- Excluded vendored dependencies, generated builds, tests and separate integration projects.
+- Kept application behaviour and version unchanged; dependencies are installed separately.
+
+## 2026-11-14: No-Docker offline local-run packaging
+
+- Added Linux x86-64/ARM64 bundle preparation using the current local Python dependency baseline.
+- Included a sanitised frontend build, portable Python, hashed wheels and pinned Gitleaks assets.
+- Added offline-only installation, loopback serving, private SQLite/session state and a minimal
+  scanner profile. Existing application defaults, feature gates and production entrypoints are unchanged.
+- Added a disposable real-scanner smoke check and documented omitted tooling and Linux verification limits.
+
 ## 2026-11-14: 3.0.0, reference review improvements
 
 - Contained source excerpts within the checkout, bounded reads to 1 MiB, omitted excerpts

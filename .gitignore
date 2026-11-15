@@ -32,6 +32,12 @@ infra/azure/arm64-aks/.env.generated
 /[Tt]ask.md
 /[Tt]asks.md
 
+# Generated offline bundle and private runtime state
+.venv-offline/
+.offline-runtime/
+.offline-state/
+/repositories/
+
 # Local agent instructions (not published)
 AGENTS.md
 Agents.md

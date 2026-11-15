@@ -47,14 +47,20 @@ def resolve_webhook_project_link(
     session: Session,
     *,
     repo: str,
+    tenant_slug: str,
+    installation_id: int,
 ) -> tuple[Project, ProjectRepository] | None:
-    """Resolve a webhook repo URL to exactly one stored project mapping."""
+    """Resolve a repository only within an authenticated installation and tenant."""
 
     results = list(
         session.exec(
             select(ProjectRepository, Project)
             .join(Project, ProjectRepository.project_id == Project.id)
-            .where(ProjectRepository.repo == repo)
+            .where(
+                ProjectRepository.repo == repo,
+                Project.tenant_slug == tenant_slug,
+                ProjectRepository.github_installation_id == installation_id,
+            )
             .order_by(ProjectRepository.id.desc())
         ).all()
     )

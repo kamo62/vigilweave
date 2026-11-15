@@ -111,7 +111,14 @@ def get_user_from_jwt(session: Session, access_token: str) -> User | None:
     """
     from sqlmodel import select
 
-    claims = verify_workos_jwt(access_token)
+    from app.core.local_auth import resolve_session_binding
+    from app.core.workos_session import SessionCookieError
+
+    try:
+        bound_user, token = resolve_session_binding(session, access_token)
+    except SessionCookieError:
+        return None
+    claims = verify_workos_jwt(token)
     workos_user_id = claims.get("sub")
 
     if not workos_user_id:
@@ -119,4 +126,4 @@ def get_user_from_jwt(session: Session, access_token: str) -> User | None:
 
     user = session.exec(select(User).where(User.workos_user_id == workos_user_id)).first()
 
-    return user
+    return user if user is not None and user.id == bound_user.id else None

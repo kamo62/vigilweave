@@ -1,5 +1,7 @@
 """FastAPI application entrypoint."""
 
+import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -59,7 +61,30 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _validate_production_secrets()
     migrate_sqlite_database()
     init_db()
-    yield
+    from app.services.scan_lifecycle import maintain_scans, resubmit_queued_scans
+
+    async def maintenance() -> None:
+        for action in (maintain_scans, resubmit_queued_scans):
+            try:
+                await asyncio.to_thread(action)
+            except Exception:
+                logging.getLogger(__name__).exception("Initial scan recovery failed")
+        while True:
+            await asyncio.sleep(settings.scan_heartbeat_interval_seconds)
+            try:
+                await asyncio.to_thread(maintain_scans)
+            except Exception:
+                logging.getLogger(__name__).exception("Scan recovery failed")
+
+    task = asyncio.create_task(maintenance())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="VigilWeave", version=__version__, lifespan=lifespan)

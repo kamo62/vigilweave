@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "VigilWeave",
-    "version": "3.0.0"
+    "version": "4.0.0"
   },
   "paths": {
     "/health": {
@@ -48,7 +48,7 @@
     "/api/v1/scans/": {
       "post": {
         "summary": "Create Scan",
-        "description": "Create and queue a scan.",
+        "description": "Create a scan and dispatch it.\n\nEager execution can return a completed or failed scan. An enqueue failure returns\nthe created scan in failed state, with a diagnostic in scan_metadata.",
         "operationId": "create_scan_api_v1_scans__post",
         "parameters": [
           {
@@ -12009,7 +12009,7 @@
           "webhooks"
         ],
         "summary": "Azure Devops Webhook",
-        "description": "Receive Azure DevOps service-hook events for pull requests.",
+        "description": "Receive service hooks. PR events require a tenant-owned subscription binding.",
         "operationId": "azure_devops_webhook_api_v1_webhooks_azure_devops_post",
         "responses": {
           "200": {
@@ -12021,6 +12021,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Missing webhook secret or tenant-owned PR subscription binding"
           }
         }
       }
@@ -13382,7 +13385,8 @@
                 "type": "null"
               }
             ],
-            "title": "Branch"
+            "title": "Branch",
+            "description": "Git branch name; refs/heads/ is accepted. Revision expressions are rejected."
           },
           "scan_type": {
             "$ref": "#/components/schemas/ScanType",
@@ -15975,7 +15979,8 @@
                 "type": "null"
               }
             ],
-            "title": "Branch"
+            "title": "Branch",
+            "description": "Git branch name; refs/heads/ is accepted. Revision expressions are rejected."
           },
           "commit": {
             "anyOf": [
@@ -15986,7 +15991,8 @@
                 "type": "null"
               }
             ],
-            "title": "Commit"
+            "title": "Commit",
+            "description": "Detached commit object ID containing 7 to 64 hexadecimal characters."
           },
           "scan_type": {
             "$ref": "#/components/schemas/ScanType",

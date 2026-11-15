@@ -1,11 +1,13 @@
 """Authentication management endpoints."""
 
+import secrets
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.core.csrf import (
@@ -15,7 +17,13 @@ from app.core.csrf import (
     issue_csrf_cookie,
 )
 from app.core.database import get_session
-from app.core.local_auth import hash_password, set_local_session, verify_password
+from app.core.local_auth import (
+    LocalAuthError,
+    get_local_user_from_session,
+    hash_password,
+    set_local_session,
+    verify_password,
+)
 from app.core.rate_limiter import AUTH_ENDPOINT_RATE_LIMIT, check_rate_limit
 from app.core.security import (
     bootstrap_registration_required,
@@ -24,7 +32,7 @@ from app.core.security import (
     hash_api_key,
     require_scope,
 )
-from app.core.workos_session import clear_session_cookie
+from app.core.workos_session import SessionCookieError, clear_session_cookie
 from app.models import (
     ApiKeyCreate,
     ApiKeyCreateResponse,
@@ -143,7 +151,7 @@ def setup_local_user(
             detail="Local bootstrap registration is no longer available",
         ) from exc
     session.refresh(user)
-    set_local_session(response, user_id=user.id)
+    set_local_session(response, user_id=user.id, session_version=user.session_version)
     return user
 
 
@@ -177,16 +185,29 @@ def login_local_user(
     session.add(user)
     session.commit()
     session.refresh(user)
-    set_local_session(response, user_id=user.id)
+    set_local_session(response, user_id=user.id, session_version=user.session_version)
     return user
 
 
 @router.post("/local/logout")
-def logout_local_user(request: Request, response: Response) -> dict[str, str]:
+def logout_local_user(
+    request: Request, response: Response, session: Session = Depends(get_session)
+) -> dict[str, str]:
     """Clear the local browser session cookie."""
 
     _enforce_same_origin_post(request)
     enforce_csrf_if_session(request)
+    try:
+        user = get_local_user_from_session(session, request.cookies.get("vigilweave_session"))
+    except SessionCookieError, LocalAuthError:
+        user = None
+    if user is not None:
+        session.execute(
+            update(User)
+            .where(col(User.id) == user.id)
+            .values(session_version=secrets.token_urlsafe(32))
+        )
+        session.commit()
     clear_session_cookie(response, "vigilweave_session")
     return {"status": "logged_out"}
 

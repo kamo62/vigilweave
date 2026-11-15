@@ -1,7 +1,9 @@
 """Models for IDE-oriented analysis requests."""
 
+from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
+from app.core.git_refs import validate_branch
 from app.models.file_metrics import FileMetricsPublic
 from app.models.finding import FindingPublic
 from app.models.scan import ScanPublic, ScanType
@@ -18,12 +20,17 @@ class IdeAnalyzeRequest(SQLModel):
     """Ad hoc analysis request for IDE extensions."""
 
     repo: str | None = None
-    branch: str | None = None
+    branch: str | None = Field(
+        default=None,
+        description="Git branch name; refs/heads/ is accepted. Revision expressions are rejected.",
+    )
     scan_type: ScanType = ScanType.FAST
     include_quality_metrics: bool = True
     persist_scan: bool = False
     files: list[IdeFile] = Field(default_factory=list)
     tools: list[str] | None = None
+
+    _valid_branch = field_validator("branch")(validate_branch)
 
 
 class IdeAnalyzeResponse(SQLModel):

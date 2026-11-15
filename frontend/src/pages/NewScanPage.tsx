@@ -262,10 +262,10 @@ export function NewScanPage() {
                 <Label>Analyzers</Label>
                 <Input
                   {...form.register('tools')}
-                  placeholder="sast, secrets, sca, iac"
+                  placeholder="semgrep, gitleaks, bandit"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Comma-separated analyzer categories or IDs, e.g. sast, secrets, sca, iac (see Settings → Tooling)
+                  Comma-separated enabled analyser IDs (see Settings → Tooling)
                 </p>
                 {form.formState.errors.tools ? (
                   <p className="text-xs text-danger">{form.formState.errors.tools.message}</p>

@@ -28,12 +28,20 @@ from app.services.config_loader import (
     get_enabled_tools,
     get_tools_for_scan_type,
 )
+from app.services.finding_identity import assign_identities, carry_triage
 from app.services.git_utils import clone_repository
 from app.services.github_app import complete_github_check_run
 from app.services.language_detector import detect_languages
 from app.services.policy_engine import apply_waivers, evaluate_scan_policy, matching_policy
 from app.services.quality_analyzer import analyze_files
-from app.services.scm_clone import resolve_clone_url, safe_clone_url_for_logs
+from app.services.scan_lifecycle import (
+    claim_scan,
+    lock_owned_scan,
+    notify_terminal,
+    start_heartbeat,
+    terminal_update,
+)
+from app.services.scm_clone import resolve_clone_url
 from app.services.tool_adapters import ToolRunResult, run_tool
 
 
@@ -42,24 +50,24 @@ def execute_scan(session: Session, scan_id: int) -> None:
 
     scan_start = perf_counter()
     increment_metric("scan_runs_total")
-    scan = session.get(Scan, scan_id)
-    if scan is None:
+    if session.get(Scan, scan_id) is None:
         raise ValueError(f"Scan {scan_id} not found")
-
-    scan.status = ScanStatus.RUNNING
-    scan.started_at = datetime.now(UTC)
-    session.add(scan)
-    session.commit()
-    session.refresh(scan)
-
+    token = claim_scan(session, scan_id)
+    if token is None:
+        return
+    session.expire_all()
+    scan = session.get(Scan, scan_id)
+    assert scan is not None
+    stop, heartbeat = start_heartbeat(session, scan_id, token)
     repo_path: Path | None = None
+    completed = False
     try:
         clone_url = resolve_clone_url(
             session, scan.repo, scan.scan_metadata, tenant_slug=scan.tenant_slug
         )
         repo_path = clone_repository(clone_url, scan.branch, scan.commit)
         findings, executions, file_metrics, language_counts = analyze_directory(
-            scan.id,
+            scan_id,
             repo_path,
             scan.scan_type,
             scan.scan_metadata.get("requested_tools") if scan.scan_metadata else [],
@@ -67,8 +75,21 @@ def execute_scan(session: Session, scan_id: int) -> None:
             session=session,
             tenant_slug=scan.tenant_slug,
         )
+        # Diagnostics have their own commit so a later policy/persistence error retains them.
+        session.rollback()
+        if not lock_owned_scan(session, scan_id, token):
+            session.rollback()
+            return
         for execution in executions:
             session.add(execution)
+        session.commit()
+        if not lock_owned_scan(session, scan_id, token):
+            session.rollback()
+            return
+        session.expire_all()
+        scan = session.get(Scan, scan_id)
+        assert scan is not None
+        carry_triage(session, scan, findings)
         secret_files = {
             str((repo_path / finding.file_path).resolve())
             for finding in findings
@@ -79,45 +100,45 @@ def execute_scan(session: Session, scan_id: int) -> None:
             session.add(finding)
         for metric in file_metrics:
             session.add(metric)
-        session.commit()
+        session.flush()
         persisted_findings = list(
             session.exec(select(Finding).where(Finding.scan_id == scan.id)).all()
         )
         persisted_findings, suppressed = apply_waivers(
-            session, scan, persisted_findings, actor=scan.scan_metadata.get("actor", "system")
+            session,
+            scan,
+            persisted_findings,
+            actor=(scan.scan_metadata or {}).get("actor", "system"),
         )
         for finding in persisted_findings:
             session.add(finding)
-        session.commit()
         finalize_scan(
             session,
-            scan.id,
+            scan_id,
             language_counts,
             [execution.tool for execution in executions],
             file_metrics,
             suppressed_findings=suppressed,
+            commit=False,
         )
-        increment_metric("scan_runs_completed_total")
-    except Exception as exc:  # noqa: BLE001
-        redacted_error = redact_sensitive_text(str(exc))
-        safe_repo = safe_clone_url_for_logs(scan.repo)
-        scan.status = ScanStatus.FAILED
-        scan.completed_at = datetime.now(UTC)
-        github_update = complete_github_check_run(scan, error_message=redacted_error)
-        scan.scan_metadata = {
-            **(scan.scan_metadata or {}),
-            "error": redacted_error,
-            "repo": safe_repo,
-            **({"github_check": github_update} if github_update else {}),
-        }
-        session.add(scan)
         session.commit()
-        increment_metric("scan_runs_failed_total")
+        completed = True
+        increment_metric("scan_runs_completed_total")
+    except Exception as exc:
+        session.rollback()
+        redacted_error = redact_sensitive_text(str(exc))
+        if terminal_update(session, scan_id, token, ScanStatus.FAILED, redacted_error):
+            increment_metric("scan_runs_failed_total")
+            notify_terminal(session, scan_id, token, ScanStatus.FAILED, redacted_error)
         raise
     finally:
+        stop.set()
+        heartbeat.join(timeout=2)
         observe_metric("scan_duration_seconds", perf_counter() - scan_start)
         if repo_path and repo_path.exists():
             shutil.rmtree(repo_path, ignore_errors=True)
+    if completed:
+        notify_terminal(session, scan_id, token, ScanStatus.COMPLETED)
 
 
 def analyze_directory(
@@ -150,13 +171,14 @@ def analyze_directory(
         tools,
         tool_definitions,
     )
-    deduped_findings = _deduplicate(findings)
-
     file_metrics: list[FileMetrics] = []
     quality_findings: list[Finding] = []
     if include_quality_metrics:
         file_metrics, quality_findings = analyze_files(repo_path, scan_id)
-        deduped_findings.extend(_deduplicate(quality_findings))
+
+    findings.extend(quality_findings)
+    assign_identities(repo_path, findings)
+    deduped_findings = _deduplicate(findings)
 
     if not persist_ids:
         for finding in deduped_findings:
@@ -166,7 +188,66 @@ def analyze_directory(
         for metric in file_metrics:
             metric.scan_id = 0
 
+    for finding in deduped_findings:
+        _sanitize_finding(finding)
     return _deduplicate(deduped_findings), executions, file_metrics, language_counts
+
+
+_SENSITIVE_FINDING_FIELDS = {
+    "secret",
+    "match",
+    "token",
+    "access_token",
+    "api_key",
+    "apikey",
+    "password",
+    "authorization",
+    "credential",
+    "credentials",
+    "private_key",
+}
+
+
+def _sanitize_finding(finding: Finding) -> None:
+    """Redact known sensitive metadata and recognisable secrets in diagnostic text."""
+
+    secrets: set[str] = set()
+
+    def collect(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key.lower() in _SENSITIVE_FINDING_FIELDS and isinstance(item, str):
+                    if item:
+                        secrets.add(item)
+                else:
+                    collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    collect(finding.tool_metadata)
+
+    def clean_text(value: str) -> str:
+        for secret in sorted(secrets, key=len, reverse=True):
+            value = value.replace(secret, "***")
+        return redact_sensitive_text(value)
+
+    def clean(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: "***" if key.lower() in _SENSITIVE_FINDING_FIELDS else clean(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [clean(item) for item in value]
+        return clean_text(value) if isinstance(value, str) else value
+
+    finding.title = clean_text(finding.title)
+    finding.message = clean_text(finding.message)
+    if finding.description is not None:
+        finding.description = clean_text(finding.description)
+    if finding.tool_metadata is not None:
+        finding.tool_metadata = clean(finding.tool_metadata)
 
 
 def _select_tools(
@@ -238,13 +319,14 @@ def _run_tools(
                 execution.status = result.status
                 execution.version = result.version
                 execution.findings_count = len(result.findings)
-                execution.stdout_summary = result.summary
-                execution.stderr_summary = result.error
+                execution.stdout_summary = redact_sensitive_text(result.summary)
+                execution.stderr_summary = (
+                    redact_sensitive_text(result.error) if result.error else None
+                )
                 execution.completed_at = datetime.now(UTC)
-                if result.status == ToolExecutionStatus.COMPLETED:
-                    for finding in result.findings:
-                        finding.tool = tool
-                    findings.extend(result.findings)
+                for finding in result.findings:
+                    finding.tool = tool
+                findings.extend(result.findings)
                 increment_metric(
                     "tool_runs_total", tags={"tool": tool, "status": str(execution.status)}
                 )
@@ -290,6 +372,7 @@ def finalize_scan(
     file_metrics: list[FileMetrics],
     *,
     suppressed_findings: int = 0,
+    commit: bool = True,
 ) -> None:
     """Persist aggregate scan rollups and policy evaluation."""
 
@@ -339,18 +422,13 @@ def finalize_scan(
             / 3,
             2,
         )
-        scan.duplication_percentage = 0.0
+        scan.duplication_percentage = None
         scan.technical_debt_minutes = sum(debt_values)
         scan.quality_grade = _quality_grade(scan.quality_score or 0.0)
     else:
         scan.quality_score = None
         scan.quality_grade = None
 
-    default_pass = (
-        scan.critical_findings <= settings.max_critical_findings
-        and scan.high_findings <= settings.max_high_findings
-        and (scan.quality_score is None or scan.quality_score >= settings.min_quality_score)
-    )
     profile = None
     if scan.project_id is not None:
         project = session.get(Project, scan.project_id)
@@ -360,22 +438,39 @@ def finalize_scan(
                 raise ValueError("Assigned quality gate policy is unavailable for this tenant")
     if profile is None:
         profile = matching_policy(session, scan.tenant_slug, scan.repo, scan.branch)
-    policy = evaluate_scan_policy(scan, profile)
+    fallback = PolicyProfile(
+        name="Deployment defaults",
+        max_critical_findings=settings.max_critical_findings,
+        max_high_findings=settings.max_high_findings,
+        min_quality_score=settings.min_quality_score,
+    )
+    policy = evaluate_scan_policy(scan, profile or fallback)
+    if profile is None:
+        policy.matched = False
+    executions = session.exec(select(ToolExecution).where(ToolExecution.scan_id == scan_id)).all()
     incomplete_tools = sorted(
         {
             execution.tool
-            for execution in session.exec(
-                select(ToolExecution).where(ToolExecution.scan_id == scan_id)
-            ).all()
+            for execution in executions
             if execution.status
             in {
                 ToolExecutionStatus.FAILED,
                 ToolExecutionStatus.PENDING,
                 ToolExecutionStatus.RUNNING,
+                ToolExecutionStatus.SKIPPED,
             }
         }
     )
-    scan.quality_gate_passed = (policy.passed if profile else default_pass) and not incomplete_tools
+    coverage_reasons = []
+    if not any(execution.status == ToolExecutionStatus.COMPLETED for execution in executions):
+        coverage_reasons.append("No analyser completed successfully")
+    if incomplete_tools:
+        coverage_reasons.append(
+            "Selected analysers did not complete: " + ", ".join(incomplete_tools)
+        )
+    policy.reasons.extend(coverage_reasons)
+    policy.passed = not policy.reasons
+    scan.quality_gate_passed = policy.passed
     scan.status = ScanStatus.COMPLETED
     scan.completed_at = datetime.now(UTC)
     scan.scan_metadata = {
@@ -384,12 +479,16 @@ def finalize_scan(
         "tools_selected": tools,
         "policy": policy.model_dump(),
         "incomplete_tools": incomplete_tools,
+        "coverage_reasons": coverage_reasons,
     }
-    github_update = complete_github_check_run(scan)
-    if github_update:
-        scan.scan_metadata["github_check"] = github_update
     session.add(scan)
-    session.commit()
+    if commit:
+        session.commit()
+        github_update = complete_github_check_run(scan)
+        if github_update:
+            scan.scan_metadata = {**(scan.scan_metadata or {}), "github_check": github_update}
+            session.add(scan)
+            session.commit()
 
 
 _CODE_CONTEXT_LINES = 7  # lines before and after the issue line

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+import secrets
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -17,13 +18,14 @@ from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlmodel import Session, select
+from sqlalchemy import update
+from sqlmodel import Session, col, select
 
 from app.core.auth_middleware import JWTVerificationError
 from app.core.config import settings
 from app.core.csrf import enforce_csrf, enforce_csrf_if_session
 from app.core.database import get_session
-from app.core.local_auth import LocalAuthError
+from app.core.local_auth import LocalAuthError, make_session_binding, resolve_session_binding
 from app.core.rate_limiter import AUTH_ENDPOINT_RATE_LIMIT, check_rate_limit
 from app.core.security import get_authenticated_user, require_scope
 from app.core.workos_session import (
@@ -361,7 +363,7 @@ def auth_callback(
         response=redirect_response,
         key="vigilweave_session",
         purpose="session",
-        value=auth_response.access_token,
+        value=make_session_binding(user.id, user.session_version, auth_response.access_token),
         max_age=86400,  # 24 hours
     )
 
@@ -370,7 +372,7 @@ def auth_callback(
             response=redirect_response,
             key="vigilweave_refresh",
             purpose="refresh",
-            value=auth_response.refresh_token,
+            value=make_session_binding(user.id, user.session_version, auth_response.refresh_token),
             max_age=7 * 86400,  # 7 days
         )
 
@@ -565,15 +567,25 @@ def _require_invitation_in_tenant(session: Session, tenant_slug: str, invitation
 
 
 @router.post("/refresh")
-def refresh_token(request: Request, response: Response) -> dict[str, str]:
+def refresh_token(
+    request: Request, response: Response, session: Session = Depends(get_session)
+) -> dict[str, str]:
     """Refresh access token using refresh token."""
 
     _enforce_same_origin_post(request)
-    enforce_csrf_if_session(request)
+    if request.cookies.get("vigilweave_refresh"):
+        enforce_csrf(request)
+    else:
+        enforce_csrf_if_session(request)
     check_rate_limit(request, AUTH_ENDPOINT_RATE_LIMIT, resource_name="authentication")
 
     try:
-        refresh_token = decode_workos_cookie("refresh", request.cookies.get("vigilweave_refresh"))
+        binding = decode_workos_cookie("refresh", request.cookies.get("vigilweave_refresh"))
+        if not binding:
+            raise SessionCookieError("Missing refresh token")
+        user, refresh_token = resolve_session_binding(session, binding)
+        if user.auth_provider != AuthProvider.WORKOS or not refresh_token:
+            raise SessionCookieError("Invalid refresh token")
     except SessionCookieError as exc:
         clear_workos_cookie(response, "vigilweave_session")
         clear_workos_cookie(response, "vigilweave_refresh")
@@ -597,12 +609,13 @@ def refresh_token(request: Request, response: Response) -> dict[str, str]:
             user_agent=_request_user_agent(request),
         )
 
-        # Update cookies
+        # Keep the original generation so a concurrent revocation cannot be undone.
+        _, _ = resolve_session_binding(session, binding)
         set_workos_cookie(
             response=response,
             key="vigilweave_session",
             purpose="session",
-            value=auth_response.access_token,
+            value=make_session_binding(user.id, user.session_version, auth_response.access_token),
             max_age=86400,
         )
         if auth_response.refresh_token:
@@ -610,7 +623,9 @@ def refresh_token(request: Request, response: Response) -> dict[str, str]:
                 response=response,
                 key="vigilweave_refresh",
                 purpose="refresh",
-                value=auth_response.refresh_token,
+                value=make_session_binding(
+                    user.id, user.session_version, auth_response.refresh_token
+                ),
                 max_age=7 * 86400,
             )
 
@@ -625,11 +640,30 @@ def refresh_token(request: Request, response: Response) -> dict[str, str]:
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response) -> dict[str, str]:
+def logout(
+    request: Request, response: Response, session: Session = Depends(get_session)
+) -> dict[str, str]:
     """Clear session cookies."""
 
     _enforce_same_origin_post(request)
-    enforce_csrf_if_session(request)
+    if request.cookies.get("vigilweave_refresh"):
+        enforce_csrf(request)
+    else:
+        enforce_csrf_if_session(request)
+    for purpose, key in (("session", "vigilweave_session"), ("refresh", "vigilweave_refresh")):
+        try:
+            binding = decode_workos_cookie(purpose, request.cookies.get(key))
+            user, _ = resolve_session_binding(session, binding) if binding else (None, "")
+            if user is not None and user.auth_provider == AuthProvider.WORKOS:
+                session.execute(
+                    update(User)
+                    .where(col(User.id) == user.id)
+                    .values(session_version=secrets.token_urlsafe(32))
+                )
+                session.commit()
+                break
+        except SessionCookieError:
+            continue
     clear_workos_cookie(response, "vigilweave_session")
     clear_workos_cookie(response, "vigilweave_refresh")
     clear_workos_cookie(response, "auth_state")

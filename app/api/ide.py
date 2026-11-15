@@ -6,6 +6,7 @@ from sqlmodel import Session
 from app.core.database import get_session
 from app.core.security import require_scope
 from app.models import IdeAnalyzeRequest, IdeAnalyzeResponse
+from app.services.config_loader import get_effective_tool_config, validate_tool_selection
 from app.services.ide_scanner import run_ide_analysis
 from app.services.policy_engine import write_audit_event
 
@@ -21,6 +22,11 @@ def analyze_from_ide(
     """Analyze a workspace or file snapshot sent by an IDE extension."""
 
     try:
+        validate_tool_selection(
+            payload.scan_type,
+            payload.tools,
+            get_effective_tool_config(session, principal.tenant_slug),
+        )
         response = run_ide_analysis(
             session, payload, tenant_slug=principal.tenant_slug, actor=principal.actor
         )

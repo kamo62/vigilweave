@@ -1,0 +1,24 @@
+tools:
+  gitleaks:
+    category: secrets
+    languages: [all]
+    enabled: true
+  bandit:
+    category: security
+    languages: [python]
+    enabled: true
+  ruff:
+    category: quality
+    languages: [python]
+    enabled: true
+
+# These names retain the API contract, but only run the bundled tools.
+scan_types:
+  comprehensive:
+    tools: [gitleaks, bandit, ruff]
+  fast:
+    tools: [gitleaks, bandit, ruff]
+  security-only:
+    tools: [gitleaks, bandit]
+  custom:
+    tools: []

@@ -18,6 +18,7 @@ from app.models import (
     Scan,
     Waiver,
 )
+from app.services.finding_identity import legacy_fingerprint_digest
 
 _PRESET_DEFINITIONS: dict[PolicyPresetKey, dict[str, Any]] = {
     PolicyPresetKey.LENIENT: {
@@ -235,11 +236,19 @@ def apply_waivers(
             (
                 waiver
                 for waiver in waivers
-                if (waiver.expires_at is None or waiver.expires_at >= now)
+                if (
+                    waiver.expires_at is None
+                    or (
+                        waiver.expires_at.replace(tzinfo=UTC)
+                        if waiver.expires_at.tzinfo is None
+                        else waiver.expires_at
+                    )
+                    >= now
+                )
                 and _matches(waiver.repo_pattern, scan.repo)
                 and _matches(waiver.branch_pattern, scan.branch or "")
                 and _matches_field(waiver.rule_id, finding.rule_id)
-                and _matches_field(waiver.fingerprint, finding.fingerprint)
+                and _matches_fingerprint(waiver, finding)
                 and _matches_field(waiver.file_path, finding.file_path)
                 and _matches_field(waiver.category, finding.category)
             ),
@@ -317,3 +326,20 @@ def _rank_profiles(profiles: list[PolicyProfile]) -> list[PolicyProfile]:
         ),
         reverse=True,
     )
+
+
+def _matches_fingerprint(waiver: Waiver, finding: Finding) -> bool:
+    if _matches_field(waiver.fingerprint, finding.fingerprint):
+        return True
+    aliases = (finding.tool_metadata or {}).get("legacy_fingerprints", [])
+    if (
+        not waiver.fingerprint
+        or not isinstance(aliases, list)
+        or legacy_fingerprint_digest(waiver.fingerprint) not in aliases
+    ):
+        return False
+    # A reused native fingerprint alone does not prove a rule match. Quality's
+    # historical file-wide fingerprint has no rule ID, so require path and category.
+    if finding.tool == "quality-analyzer" and finding.category in {"complexity", "maintainability"}:
+        return True
+    return bool(finding.rule_id and waiver.rule_id == finding.rule_id)

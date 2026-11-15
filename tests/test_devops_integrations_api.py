@@ -5,11 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
-from sqlmodel import create_engine
+from sqlmodel import Session, create_engine
 
 from app.core import database as database_module
 from app.core.config import settings
 from app.main import app
+from app.models import TenantGitHubInstallation
 from app.services import azure_marketplace
 from app.tasks import scan_tasks
 
@@ -54,6 +55,17 @@ def test_github_webhook_creates_scan(tmp_path: Path, monkeypatch) -> None:
     headers = _bootstrap_key(client, tenant_slug="acme")
     repo_url = "https://github.com/octo/example.git"
     _create_project(client, headers, key="github-example", repo=repo_url)
+    with Session(database_module.engine) as session:
+        session.add(
+            TenantGitHubInstallation(tenant_slug="acme", installation_id=99, account_login="octo")
+        )
+        session.commit()
+    linked = client.post(
+        "/api/v1/projects/github-example/repos",
+        headers=headers,
+        json={"repos": [repo_url], "github_installation_id": 99},
+    )
+    assert linked.status_code == 200, linked.text
 
     monkeypatch.setattr(settings, "github_webhook_secret", "test-secret")
     monkeypatch.setattr(settings, "celery_task_always_eager", False)

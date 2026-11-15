@@ -67,9 +67,18 @@ def analyze_files(base_path: Path, scan_id: int) -> tuple[list[FileMetrics], lis
 
     for file_path in _iter_source_files(base_path):
         language = _detect_language(file_path)
-        text = file_path.read_text(encoding="utf-8", errors="ignore")
+        try:
+            with file_path.open("rb") as source:
+                content = source.read(1_048_577)
+            if len(content) > 1_048_576:
+                continue
+            text = content.decode("utf-8", errors="replace")
+            analysis = lizard.analyze_file.analyze_source_code(str(file_path), text)
+        except OSError, ValueError:
+            continue
         loc = _logical_loc(text)
-        complexity = _cyclomatic_complexity(file_path, text, language)
+        functions = analysis.function_list
+        complexity = max((int(f.cyclomatic_complexity) for f in functions), default=1)
         maintainability = _maintainability_index(loc, complexity)
         debt_minutes = max(0, int((complexity - 8) * 15))
         relative = _relative_path(base_path, file_path)
@@ -85,19 +94,24 @@ def analyze_files(base_path: Path, scan_id: int) -> tuple[list[FileMetrics], lis
         )
         metrics.append(metric)
 
-        if complexity >= 14:
+        for function in functions:
+            function_complexity = int(function.cyclomatic_complexity)
+            if function_complexity < 14:
+                continue
             findings.append(
                 Finding(
                     scan_id=scan_id,
                     tool="quality-analyzer",
-                    severity=FindingSeverity.MEDIUM if complexity < 20 else FindingSeverity.HIGH,
+                    severity=FindingSeverity.MEDIUM
+                    if function_complexity < 20
+                    else FindingSeverity.HIGH,
                     title="High cyclomatic complexity",
-                    message=f"{relative} has cyclomatic complexity {complexity}",
+                    message=f"{function.name} has cyclomatic complexity {function_complexity}",
                     description="Break down nested logic into smaller, testable units.",
                     category="complexity",
                     file_path=relative,
-                    fingerprint=f"quality:{relative}:complexity",
-                    line=1,
+                    fingerprint=f"quality:{relative}:complexity:{function.name}:{function.start_line}",
+                    line=function.start_line,
                 )
             )
         if maintainability < 55:
@@ -123,6 +137,8 @@ def analyze_files(base_path: Path, scan_id: int) -> tuple[list[FileMetrics], lis
 
 def _iter_source_files(base_path: Path) -> Iterable[Path]:
     for file_path in base_path.rglob("*"):
+        if file_path.is_symlink():
+            continue
         if not file_path.is_file():
             continue
         if ".git" in file_path.parts or "node_modules" in file_path.parts:

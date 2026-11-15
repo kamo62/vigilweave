@@ -125,4 +125,16 @@ describe('ScanDetailPage', () => {
 
     expect(await screen.findByText('Scanner process exited with code 1')).toBeInTheDocument()
   })
+
+  it('explains coverage failures and analyser executions', async () => {
+    vi.mocked(fetchScan).mockResolvedValue({
+      ...scan('completed', { coverage_reasons: ['No analyser completed successfully'], policy: { reasons: ['High findings exceed limit'] } }),
+      quality_gate_passed: false,
+      tool_executions: [{ id: 1, scan_id: 42, tool: 'bandit', status: 'failed', findings_count: 0, version: '1.0', started_at: '2026-11-14T08:00:00Z', completed_at: '2026-11-14T08:00:02Z', stderr_summary: 'report missing' }],
+    })
+    renderScanPage()
+    expect(await screen.findByText('No analyser completed successfully')).toBeInTheDocument()
+    expect(screen.getByText('High findings exceed limit')).toBeInTheDocument()
+    expect(screen.getByText(/report missing/)).toBeInTheDocument()
+  })
 })

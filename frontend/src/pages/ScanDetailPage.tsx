@@ -758,6 +758,22 @@ export function ScanDetailPage() {
           </div>
         </div>
 
+        {(scan.scan_metadata || scan.tool_executions?.length) ? (
+          <Card>
+            <CardHeader>Analysis coverage</CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {Array.isArray(scan.scan_metadata?.coverage_reasons) && scan.scan_metadata.coverage_reasons.filter((reason): reason is string => typeof reason === 'string').map((reason) => <p key={reason}>{reason}</p>)}
+              {typeof scan.scan_metadata?.policy === 'object' && scan.scan_metadata.policy !== null && 'reasons' in scan.scan_metadata.policy && Array.isArray(scan.scan_metadata.policy.reasons) && scan.scan_metadata.policy.reasons.filter((reason): reason is string => typeof reason === 'string').map((reason) => <p key={reason}>{reason}</p>)}
+              {scan.tool_executions?.map((execution) => (
+                <p key={execution.id}>
+                  {execution.tool}: {execution.status} · version {execution.version || 'unknown'} · {execution.completed_at ? `${Math.max(0, (Date.parse(execution.completed_at) - Date.parse(execution.started_at)) / 1000).toFixed(1)}s` : 'duration pending'}
+                  {execution.stderr_summary ? ` · ${execution.stderr_summary}` : ''}
+                </p>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
+
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <MetricCard

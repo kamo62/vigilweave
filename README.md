@@ -39,6 +39,10 @@ Released under the [MIT License](LICENSE).
 
 ## Quick Start
 
+For the source-only core application, see the [core setup guide](docs/core-application.md).
+Create its ZIP with `python3 scripts/package_core.py`. Dependencies, generated builds,
+tests and separate integration projects are not included in that archive.
+
 ### Backend
 
 ```bash
@@ -90,6 +94,38 @@ or network access is required.
 See the [SCM provider API reference](docs/scm-providers-api.md) for authentication,
 permissions, discovery endpoints, pagination, clone credentials and troubleshooting.
 
+### Upgrading to 4.0
+
+- Browser cookies now expire on the server. Access sessions last 24 hours; WorkOS refresh
+  cookies last seven days. Logout signs out all browser sessions for that user, and security
+  changes revoke existing sessions. The migration requires a one-time sign-in. Configure
+  `SESSION_SECRET` for development sessions that must survive restarts or multiple processes;
+  without it, development and test servers use a random secret for each process.
+- Git credentials are passed through transient repository-scoped configuration, and clone
+  arguments and saved remotes omit credentials. Branches must be valid Git branch names;
+  explicit commits require 7–64 hexadecimal characters. GitHub webhooks require a stored
+  tenant installation and a repository link for that installation. Azure pull-request hooks
+  currently return 503 until tenant-owned subscription credentials are implemented.
+- Scanner processes receive a minimal environment and temporary HOME. Affected scanners
+  ignore repository configuration; temporary caches can require repeated downloads and
+  reduce offline functionality. Older tools may reject required flags. This is not an OS
+  sandbox: scanners retain the worker's filesystem, network and process privileges.
+- A selected analyser that skips or fails, or a scan with no completed analyser, fails the
+  gate. Custom scans require enabled analyser IDs. Invalid SARIF and incomplete Bandit,
+  Semgrep, Ruff, Checkov, ESLint, SQLFluff, SwiftLint and Android reports cannot count as
+  successful analysis. Failed Android/.NET builds retain valid report findings but fail execution.
+- Complexity findings identify individual Lizard functions. Scan-level duplication is
+  unmeasured and is reported as unknown. The debt estimate remains a heuristic.
+- New findings use versioned repository-relative identities. Legacy native waivers need an
+  exact rule constraint to match a compatibility alias; review fingerprint-only native waivers
+  before upgrading. Existing quality complexity waivers continue to cover the file's functions.
+  Triage carries between completed scans of the same tenant, assigned project, repository and
+  branch; previously fixed issues reopen. Identical repeated occurrences can change identity
+  when another identical occurrence is inserted earlier. Old scan records are not rewritten.
+- Finding diagnostic text and known sensitive metadata fields receive best-effort redaction
+  before repository and IDE results are returned or stored. This cannot detect every secret.
+  Partial findings from failed tools are retained, while incomplete coverage still fails the gate.
+
 ### Upgrading to 3.0
 
 - API-key creation requires admin authority, including the first key created by an
@@ -116,6 +152,23 @@ permissions, discovery endpoints, pagination, clone credentials and troubleshoot
 source .venv/bin/activate
 celery -A app.core.celery_app.celery_app worker --loglevel=info
 ```
+
+Queued scans are claimed once with a database token. Workers send heartbeats, and the API
+marks expired workers' scans as failed with an interruption reason. Tool diagnostics survive
+finalisation failures; findings, metrics, waivers and successful completion commit together.
+Broker submission failures return the created scan in failed state instead of leaving it queued.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `SCAN_HEARTBEAT_INTERVAL_SECONDS` | `30` | Worker heartbeat and API recovery interval |
+| `SCAN_STALE_AFTER_SECONDS` | `300` | Heartbeat age before interruption recovery; must exceed twice the heartbeat interval |
+| `SCAN_RECOVERY_BATCH_SIZE` | `100` | Maximum stale recoveries per pass and queued resubmissions at startup; range 1–1000 |
+
+Recovery starts in the API background after database initialisation. Startup resubmits at most
+one batch of queued scans in Celery mode. Keep the API running for periodic recovery. Eager
+mode still executes scans synchronously. Stop old API/worker processes before applying the
+new migrations. Recovery prevents stale result writes, but does not forcibly stop scanner
+processes or guarantee exactly-once delivery of external SCM notifications.
 
 ## Docker (Cross-Platform Local Repo Scans)
 
